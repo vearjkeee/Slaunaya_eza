@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Slaůnaya eža — Новый заказ</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+/* ── Reset & Base ─────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+body{background:var(--tg-theme-bg-color,#fff);color:var(--tg-theme-text-color,#000)}
+
+/* ── CSS переменные из темы Telegram ─────────────── */
+:root{
+  --bg:        var(--tg-theme-bg-color,#ffffff);
+  --bg2:       var(--tg-theme-secondary-bg-color,#f5f5f5);
+  --text:      var(--tg-theme-text-color,#000000);
+  --hint:      var(--tg-theme-hint-color,#999999);
+  --link:      var(--tg-theme-link-color,#2481cc);
+  --btn:       var(--tg-theme-button-color,#D85A30);
+  --btn-text:  var(--tg-theme-button-text-color,#ffffff);
+  --border:    rgba(0,0,0,0.12);
+  --border-d:  rgba(0,0,0,0.08);
+  --acc:       #D85A30;
+  --acc-l:     rgba(216,90,48,0.12);
+  --acc-d:     #993C1D;
+  --grn:       #3B6D11;
+  --grn-l:     rgba(59,109,17,0.1);
+  --rad:       10px;
+  --rad-s:     6px;
+}
+
+/* ── Структура ────────────────────────────────────── */
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.hdr{flex-shrink:0;padding:10px 16px 8px;background:var(--bg);border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.hdr-l{flex:1}
+.hdr-title{font-size:15px;font-weight:600;color:var(--text)}
+.hdr-meta{font-size:12px;color:var(--hint);margin-top:1px}
+.hdr-sum{font-size:14px;font-weight:600;color:var(--acc);flex-shrink:0;padding-left:12px}
+.screens{flex:1;overflow:hidden;position:relative}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;opacity:0;pointer-events:none;transition:opacity .15s}
+.screen.on{opacity:1;pointer-events:all}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.scroll::-webkit-scrollbar{width:3px}
+.scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:2px}
+
+/* ── Tab bar ──────────────────────────────────────── */
+.tabs{flex-shrink:0;display:flex;background:var(--bg);border-top:0.5px solid var(--border);padding-bottom:env(safe-area-inset-bottom)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 0;border:none;background:transparent;color:var(--hint);font-size:10px;cursor:pointer;position:relative;font-family:inherit}
+.tab.on{color:var(--acc)}
+.tab-icon{font-size:20px;line-height:1}
+.bdg{position:absolute;top:4px;right:calc(50% - 22px);background:var(--acc);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;display:none}
+.bdg.on{display:block}
+
+/* ── Секции ───────────────────────────────────────── */
+.sec{padding:12px 16px;background:var(--bg);border-bottom:0.5px solid var(--border-d)}
+.lbl{font-size:11px;font-weight:600;color:var(--hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+
+/* ── Инпуты ───────────────────────────────────────── */
+input,select,textarea{
+  width:100%;height:38px;
+  border:1px solid var(--border);
+  border-radius:var(--rad-s);
+  padding:0 10px;
+  font-size:14px;
+  font-family:inherit;
+  color:var(--text);
+  background:var(--bg2);
+  appearance:none;
+  -webkit-appearance:none;
+  outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--acc)}
+textarea{height:auto;padding:8px 10px;resize:none}
+.row{display:flex;gap:8px}
+.row>*{flex:1;min-width:0}
+
+/* ── Toggle ───────────────────────────────────────── */
+.tg{display:flex;border:1px solid var(--border);border-radius:var(--rad-s);overflow:hidden}
+.tg-btn{flex:1;height:38px;border:none;background:var(--bg2);color:var(--hint);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s}
+.tg-btn:not(:last-child){border-right:0.5px solid var(--border)}
+.tg-btn.on{background:var(--acc);color:#fff}
+
+/* ── Клиент autocomplete ──────────────────────────── */
+.cw{position:relative}
+.cw input{padding-right:32px}
+.cx{position:absolute;right:10px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--hint);font-size:16px;cursor:pointer;padding:0;line-height:1}
+.cdd{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg);border:1px solid var(--border);border-radius:var(--rad);z-index:100;max-height:200px;overflow-y:auto;display:none;box-shadow:0 4px 16px rgba(0,0,0,.12)}
+.cdd.on{display:block}
+.co{padding:10px 12px;cursor:pointer;border-bottom:0.5px solid var(--border-d)}
+.co:last-child{border-bottom:none}
+.co-name{font-size:14px;color:var(--text);font-weight:500}
+.co-sub{font-size:11px;color:var(--hint);margin-top:2px}
+.co:active{background:var(--bg2)}
+
+/* ── Статистика ───────────────────────────────────── */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 16px}
+.stat{background:var(--bg);border:0.5px solid var(--border-d);border-radius:var(--rad);padding:10px;text-align:center}
+.stat-n{font-size:22px;font-weight:600;color:var(--text)}
+.stat-n.a{color:var(--acc)}
+.stat-n.d{color:var(--acc-d)}
+.stat-l{font-size:11px;color:var(--hint);margin-top:2px}
+
+/* ── AI блок ──────────────────────────────────────── */
+.ai-btn{width:100%;height:38px;background:var(--acc-l);border:none;border-radius:var(--rad-s);font-size:13px;font-weight:600;color:var(--acc-d);cursor:pointer;font-family:inherit;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px}
+.ai-btn:active{opacity:.8}
+.ai-res{display:none;margin-top:8px;background:var(--bg2);border-radius:var(--rad-s);padding:10px;border:0.5px solid var(--border-d)}
+.ai-hint{font-size:11px;color:var(--hint);margin-bottom:6px;font-weight:600}
+.ai-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--border-d)}
+.ai-row:last-child{border:none}
+.ai-name{font-size:13px;color:var(--text);flex:1;line-height:1.3}
+.ai-note{display:inline-block;font-size:10px;color:var(--acc-d);background:var(--acc-l);padding:2px 6px;border-radius:4px;margin-top:3px}
+.ai-add{background:var(--acc);color:#fff;border:none;border-radius:4px;padding:5px 10px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;flex-shrink:0;margin-left:8px}
+.ai-add.done{background:var(--grn)}
+
+/* ── Каталог ──────────────────────────────────────── */
+.srch{padding:10px 16px;background:var(--bg);border-bottom:0.5px solid var(--border-d)}
+.srch input{border-radius:20px}
+.chips{display:flex;gap:8px;padding:10px 16px;overflow-x:auto;background:var(--bg);border-bottom:0.5px solid var(--border-d);flex-shrink:0}
+.chips::-webkit-scrollbar{display:none}
+.chip{white-space:nowrap;padding:5px 12px;border-radius:16px;border:0.5px solid var(--border);font-size:12px;font-weight:500;color:var(--hint);background:var(--bg2);cursor:pointer;flex-shrink:0}
+.chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+
+/* ── Ручное добавление ────────────────────────────── */
+.manual{padding:10px 16px;background:var(--bg);border-bottom:0.5px solid var(--border-d)}
+.manual-row{display:flex;gap:6px;align-items:center}
+.manual-row .mn{flex:2}
+.manual-row .mp{flex:1;min-width:0}
+.manual-row .mq{width:52px;flex:none}
+.m-add{height:38px;padding:0 14px;background:var(--acc);color:#fff;border:none;border-radius:var(--rad-s);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.m-add:active{opacity:.85}
+
+/* ── Блюдо в каталоге ─────────────────────────────── */
+.dish{display:flex;align-items:center;padding:10px 16px;border-bottom:0.5px solid var(--border-d);background:var(--bg);gap:12px}
+.di-info{flex:1;min-width:0}
+.di-name{font-size:14px;color:var(--text);line-height:1.3}
+.di-cat{font-size:11px;color:var(--hint);margin-top:2px}
+.di-price{font-size:14px;font-weight:600;color:var(--acc-d);flex-shrink:0;min-width:64px;text-align:right}
+.ab{width:34px;height:34px;border-radius:50%;background:var(--acc);border:none;color:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
+.ab:active{opacity:.8;transform:scale(.95)}
+.qc{display:flex;align-items:center;flex-shrink:0}
+.qb{width:30px;height:30px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.qb:first-child{border-radius:var(--rad-s) 0 0 var(--rad-s);border-right:none}
+.qb:last-child{border-radius:0 var(--rad-s) var(--rad-s) 0;border-left:none}
+.qv{width:32px;height:30px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--text);background:var(--bg)}
+
+/* ── Корзина ──────────────────────────────────────── */
+.cart-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--hint);font-size:14px}
+.ci{padding:12px 16px;border-bottom:0.5px solid var(--border-d);background:var(--bg)}
+.ci-top{display:flex;justify-content:space-between;align-items:start;gap:8px}
+.ci-name{font-size:14px;color:var(--text);flex:1;line-height:1.3}
+.ci-tag{font-size:10px;color:var(--hint);font-style:italic}
+.ci-del{border:none;background:transparent;color:var(--hint);font-size:18px;cursor:pointer;padding:0;line-height:1;flex-shrink:0}
+.ci-bot{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.pe{display:flex;align-items:center;gap:6px}
+.pi{width:68px;height:30px;text-align:center;font-size:13px;border-radius:var(--rad-s);border:1px solid var(--border);background:var(--bg2);color:var(--text);padding:0 6px}
+.pi:focus{border-color:var(--acc)}
+.pl{font-size:12px;color:var(--hint)}
+.ct{font-size:14px;font-weight:600;color:var(--acc-d)}
+.cfooter{flex-shrink:0;padding:12px 16px;background:var(--bg);border-top:0.5px solid var(--border);padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+.total-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.total-l{font-size:14px;color:var(--hint)}
+.total-v{font-size:24px;font-weight:700;color:var(--text)}
+.sv{width:100%;height:46px;background:var(--btn,var(--acc));color:var(--btn-text,#fff);border:none;border-radius:var(--rad);font-size:16px;font-weight:600;font-family:inherit;cursor:pointer;transition:opacity .15s}
+.sv:disabled{opacity:.4;cursor:default}
+.sv:active:not(:disabled){opacity:.85}
+
+/* ── Лоадер ───────────────────────────────────────── */
+#loader{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:999;font-size:14px;color:var(--hint)}
+.spin{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Toast ────────────────────────────────────────── */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(0,0,0,.75);color:#fff;font-size:13px;padding:8px 18px;border-radius:20px;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;z-index:1000}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <div class="spin"></div>
+  <div>Загружаем меню...</div>
+</div>
+
+<div id="toast"></div>
+
+<div id="app" style="display:none">
+  <div class="hdr">
+    <div class="hdr-l">
+      <div class="hdr-title">Новый заказ</div>
+      <div class="hdr-meta" id="hdr-meta">Дата и клиент не указаны</div>
+    </div>
+    <div class="hdr-sum" id="hdr-sum"></div>
+  </div>
+
+  <div class="screens">
+
+    <!-- ══ ЭКРАН 1: ЗАКАЗ ══════════════════════════════ -->
+    <div class="screen on" id="s-order">
+      <div class="scroll">
+
+        <div class="sec">
+          <div class="lbl">Дата и клиент</div>
+          <div class="row" style="margin-bottom:8px">
+            <input type="date" id="o-date" oninput="syncHeader()"/>
+            <input type="text" id="o-time" placeholder="Время (напр. 14:00)" oninput="syncHeader()"/>
+          </div>
+          <div class="cw" style="margin-bottom:8px">
+            <input type="text" id="o-client" placeholder="Имя клиента" oninput="onClientInput()" autocomplete="off"/>
+            <button class="cx" onclick="clearClient()">✕</button>
+            <div class="cdd" id="cdd"></div>
+          </div>
+          <select id="o-contact">
+            <option value="">Способ связи...</option>
+            <option>Телеграм</option>
+            <option>Вайбер</option>
+            <option>Инстаграм</option>
+            <option>Телефон</option>
+            <option>Другое</option>
+          </select>
+        </div>
+
+        <div class="sec">
+          <div class="lbl">Способ получения</div>
+          <div class="tg" id="tg-d">
+            <button class="tg-btn on" onclick="setDeliv('Самовывоз',this)">Самовывоз</button>
+            <button class="tg-btn" onclick="setDeliv('Доставка',this)">Доставка</button>
+          </div>
+          <div id="deliv-extra" style="display:none;margin-top:8px">
+            <input type="text" id="o-addr" placeholder="Адрес доставки" style="margin-bottom:8px"/>
+            <input type="number" id="o-dcost" placeholder="Стоимость доставки (BYN)" min="0" step="0.5" oninput="upd()"/>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="lbl">Способ оплаты</div>
+          <div class="tg" id="tg-p">
+            <button class="tg-btn on" onclick="setPay(true,this)">Предоплата 50%</button>
+            <button class="tg-btn" onclick="setPay(false,this)">Оплата по факту</button>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="lbl">Импорт из сообщения клиента</div>
+          <textarea id="ai-txt" rows="4" placeholder="Вставьте сообщение клиента...&#10;Например: «2 утиных окорочка, 4 пирожка с яблоком и сырный суп»"></textarea>
+          <button class="ai-btn" onclick="parseAI()">✦ Разобрать через AI</button>
+          <div class="ai-res" id="ai-res"></div>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><div class="stat-n" id="st-pos">0</div><div class="stat-l">позиций</div></div>
+          <div class="stat"><div class="stat-n a" id="st-qty">0</div><div class="stat-l">штук</div></div>
+          <div class="stat"><div class="stat-n d" id="st-sum">0</div><div class="stat-l">BYN</div></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══ ЭКРАН 2: КАТАЛОГ ════════════════════════════ -->
+    <div class="screen" id="s-cat">
+      <div class="srch"><input type="text" id="srch" placeholder="Поиск блюда..." oninput="filter()"/></div>
+      <div class="chips" id="chips"></div>
+      <div class="manual">
+        <div class="lbl" style="margin-bottom:6px">Добавить вручную</div>
+        <div class="manual-row">
+          <input type="text" id="m-name" class="mn" placeholder="Название"/>
+          <input type="number" id="m-price" class="mp" placeholder="Цена" min="0" step="0.5"/>
+          <input type="number" id="m-qty" class="mq" placeholder="×" min="1" step="1"/>
+          <button class="m-add" onclick="addManual()">+</button>
+        </div>
+      </div>
+      <div class="scroll"><div id="dlist"></div></div>
+    </div>
+
+    <!-- ══ ЭКРАН 3: КОРЗИНА ════════════════════════════ -->
+    <div class="screen" id="s-cart">
+      <div class="scroll" id="cscroll">
+        <div class="cart-empty" id="ce" style="height:300px">
+          <div style="font-size:40px">🛒</div>
+          <div>Корзина пуста</div>
+          <div style="font-size:12px">Добавьте блюда из каталога</div>
+        </div>
+        <div id="citems"></div>
+        <div id="cnote-wrap" style="display:none">
+          <div class="sec">
+            <div class="lbl">Комментарий к заказу</div>
+            <textarea id="c-note" rows="3" placeholder="Пожелания, аллергии, уточнения..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="cfooter">
+        <div class="total-row">
+          <span class="total-l">Итого</span>
+          <span class="total-v"><span id="c-total">0,00</span> BYN</span>
+        </div>
+        <button class="sv" id="sv-btn" onclick="saveOrder()" disabled>Сохранить заказ</button>
+      </div>
+    </div>
+
+  </div><!-- /screens -->
+
+  <div class="tabs">
+    <button class="tab on" onclick="go('order',this)">
+      <span class="tab-icon">📋</span><span>Заказ</span>
+    </button>
+    <button class="tab" onclick="go('cat',this)">
+      <span class="tab-icon">🍽</span><span>Каталог</span>
+    </button>
+    <button class="tab" onclick="go('cart',this)">
+      <span class="tab-icon">🛒</span><span>Корзина</span>
+      <span class="bdg" id="bdg">0</span>
+    </button>
+  </div>
+</div><!-- /app -->
+
+<script>
+// ── Telegram Web App ─────────────────────────────────
+const twa = window.Telegram?.WebApp;
+if (twa) {
+  twa.ready();
+  twa.expand();
+}
+
+// ── URL кэша (замени на свой после создания репозитория) ──
+// Формат: https://ТВОЙ_ЛОГИН.github.io/ТВОЙ_РЕПО/menu_cache.json
+const CACHE_URL = "https://ТВОЙ_ЛОГИН.github.io/ТВОЙ_РЕПО/menu_cache.json";
+
+// ── Данные ───────────────────────────────────────────
+let MENU    = [];
+let CLIENTS = [];
+const cart  = {};
+let delivType = 'Самовывоз';
+let prepay    = true;
+let manualId  = 1000;
+
+// ── Загрузка кэша ────────────────────────────────────
+async function loadCache() {
+  try {
+    const r = await fetch(CACHE_URL + '?t=' + Date.now());
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    MENU    = data.menu    || [];
+    CLIENTS = data.clients || [];
+    console.log(`Загружено: ${MENU.length} блюд, ${CLIENTS.length} клиентов`);
+  } catch(e) {
+    console.warn('Кэш недоступен:', e);
+    // Можно оставить MENU=[] — интерфейс не упадёт, ручное добавление работает
+    showToast('⚠️ Меню недоступно — используй ручное добавление');
+  }
+  document.getElementById('loader').style.display = 'none';
+  document.getElementById('app').style.display    = 'flex';
+  buildChips();
+  filter();
+}
+
+// ── Навигация ─────────────────────────────────────────
+function go(name, btn) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('on'));
+  document.getElementById('s-' + name).classList.add('on');
+  btn.classList.add('on');
+  if (name === 'cat') filter();
+}
+
+// ── Toast ─────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('on'), 2500);
+}
+
+// ── Клиенты autocomplete ──────────────────────────────
+function onClientInput() {
+  const q   = document.getElementById('o-client').value.toLowerCase().trim();
+  const dd  = document.getElementById('cdd');
+  if (!q || CLIENTS.length === 0) { dd.classList.remove('on'); syncHeader(); return; }
+  const hits = CLIENTS.filter(c => c.name.toLowerCase().includes(q)).slice(0, 8);
+  if (!hits.length) { dd.classList.remove('on'); syncHeader(); return; }
+  dd._hits = hits;
+  dd.innerHTML = hits.map((c, i) => `
+    <div class="co" onclick="pickClient(${i})">
+      <div class="co-name">${c.name}</div>
+      <div class="co-sub">${c.contact}${c.type ? ' · ' + c.type : ''}${c.address ? ' · ' + c.address : ''}</div>
+    </div>`).join('');
+  dd.classList.add('on');
+  syncHeader();
+}
+
+function pickClient(i) {
+  const c = document.getElementById('cdd')._hits[i];
+  document.getElementById('o-client').value  = c.name;
+  document.getElementById('o-contact').value = c.contact || '';
+  const isDeliv = c.type === 'Доставка';
+  document.querySelectorAll('#tg-d .tg-btn').forEach((b, idx) => {
+    b.classList.toggle('on', isDeliv ? idx === 1 : idx === 0);
+  });
+  delivType = c.type || 'Самовывоз';
+  document.getElementById('deliv-extra').style.display = isDeliv ? 'block' : 'none';
+  if (isDeliv && c.address) document.getElementById('o-addr').value = c.address;
+  document.getElementById('cdd').classList.remove('on');
+  syncHeader();
+}
+
+function clearClient() {
+  document.getElementById('o-client').value = '';
+  document.getElementById('cdd').classList.remove('on');
+  syncHeader();
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.cw')) document.getElementById('cdd').classList.remove('on');
+});
+
+// ── Доставка / Оплата ─────────────────────────────────
+function setDeliv(v, btn) {
+  delivType = v;
+  document.querySelectorAll('#tg-d .tg-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('deliv-extra').style.display = v === 'Доставка' ? 'block' : 'none';
+  upd();
+}
+
+function setPay(v, btn) {
+  prepay = v;
+  document.querySelectorAll('#tg-p .tg-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+// ── AI импорт ─────────────────────────────────────────
+function parseAI() {
+  const txt = document.getElementById('ai-txt').value.trim();
+  if (!txt) { showToast('Вставьте сообщение клиента'); return; }
+  const btn = document.querySelector('.ai-btn');
+  btn.textContent = '⟳ Разбираю...';
+  btn.disabled = true;
+
+  // TODO: здесь будет реальный вызов Groq API через бота
+  // Пока демо-режим с мок-данными (показывает логику интерфейса)
+  const mock = MENU.length >= 3 ? [
+    { m: MENU[0], q: 2 },
+    { m: MENU[1], q: 1 },
+    { m: MENU[2], q: 2, note: 'Уточнить детали' },
+  ] : [];
+
+  setTimeout(() => {
+    btn.textContent = '✦ Разобрать через AI';
+    btn.disabled = false;
+    if (!mock.length) { showToast('Меню не загружено'); return; }
+    const res = document.getElementById('ai-res');
+    res.style.display = 'block';
+    res.innerHTML = `<div class="ai-hint">Найдено ${mock.length} позиций — нажмите + для добавления</div>` +
+      mock.map((p, i) => `
+        <div class="ai-row">
+          <div class="ai-name">${p.m.name} × ${p.q}${p.note ? `<br><span class="ai-note">${p.note}</span>` : ''}</div>
+          <button class="ai-add" id="ai-b-${i}" onclick="aiAdd('${p.m.id}',${p.q},${i})">+ корзина</button>
+        </div>`).join('');
+  }, 900);
+}
+
+function aiAdd(id, q, i) {
+  const d = MENU.find(m => String(m.id) === String(id));
+  if (!d) return;
+  if (!cart[id]) cart[id] = { d, q: 0, p: d.price };
+  cart[id].q = q;
+  const b = document.getElementById('ai-b-' + i);
+  b.textContent = '✓'; b.classList.add('done'); b.disabled = true;
+  upd();
+  showToast('Добавлено в корзину');
+}
+
+// ── Каталог ───────────────────────────────────────────
+function buildChips() {
+  const cats = ['Все', ...new Set(MENU.map(d => d.cat).filter(Boolean))];
+  const el   = document.getElementById('chips');
+  el.innerHTML = '';
+  cats.forEach((c, i) => {
+    const ch = document.createElement('div');
+    ch.className = 'chip' + (i === 0 ? ' on' : '');
+    ch.textContent = c;
+    ch.onclick = () => {
+      document.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      ch.classList.add('on');
+      filter();
+    };
+    el.appendChild(ch);
+  });
+}
+
+function filter() {
+  const q   = document.getElementById('srch').value.toLowerCase();
+  const cat = document.querySelector('.chip.on')?.textContent || 'Все';
+  const dl  = document.getElementById('dlist');
+  dl.innerHTML = '';
+  MENU
+    .filter(d => (cat === 'Все' || d.cat === cat) && (!q || d.name.toLowerCase().includes(q)))
+    .forEach(d => {
+      const id  = String(d.id);
+      const qty = cart[id]?.q || 0;
+      const row = document.createElement('div');
+      row.className = 'dish';
+      row.innerHTML = `
+        <div class="di-info">
+          <div class="di-name">${d.name}</div>
+          <div class="di-cat">${d.cat}</div>
+        </div>
+        <div class="di-price">${(+d.price).toFixed(2)} BYN</div>
+        ${qty === 0
+          ? `<button class="ab" onclick="addC('${id}')">+</button>`
+          : `<div class="qc">
+               <button class="qb" onclick="chQ('${id}',-1)">−</button>
+               <div class="qv">${qty}</div>
+               <button class="qb" onclick="chQ('${id}',1)">+</button>
+             </div>`}`;
+      dl.appendChild(row);
+    });
+}
+
+function addC(id) {
+  const d = MENU.find(m => String(m.id) === id);
+  if (!d) return;
+  if (!cart[id]) cart[id] = { d: { id, name: d.name, cat: d.cat }, q: 0, p: +d.price };
+  cart[id].q++;
+  upd(); filter();
+}
+
+function chQ(id, delta) {
+  if (!cart[id]) return;
+  cart[id].q += delta;
+  if (cart[id].q <= 0) delete cart[id];
+  upd(); filter();
+}
+
+// ── Ручное добавление ─────────────────────────────────
+function addManual() {
+  const name  = document.getElementById('m-name').value.trim();
+  const price = parseFloat(document.getElementById('m-price').value) || 0;
+  const qty   = parseInt(document.getElementById('m-qty').value)    || 1;
+  if (!name)    { showToast('Укажите название'); return; }
+  if (price <= 0) { showToast('Укажите цену'); return; }
+  const id = 'm' + (manualId++);
+  cart[id] = { d: { id, name, cat: 'Вручную' }, q: qty, p: price, manual: true };
+  document.getElementById('m-name').value  = '';
+  document.getElementById('m-price').value = '';
+  document.getElementById('m-qty').value   = '';
+  upd();
+  showToast('✓ Добавлено: ' + name);
+}
+
+// ── Корзина ───────────────────────────────────────────
+function removeC(id) { delete cart[id]; upd(); renderCart(); }
+
+function chPrice(id, v) {
+  if (!cart[id]) return;
+  cart[id].p = parseFloat(v) || 0;
+  const el = document.getElementById('lt-' + id);
+  if (el) el.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
+  upd();
+}
+
+function chQC(id, d) {
+  if (!cart[id]) return;
+  cart[id].q += d;
+  if (cart[id].q <= 0) { delete cart[id]; upd(); renderCart(); return; }
+  const qv = document.querySelector(`#ci-${CSS.escape(id)} .qv`);
+  if (qv) qv.textContent = cart[id].q;
+  const lt = document.getElementById('lt-' + id);
+  if (lt) lt.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
+  upd();
+}
+
+function renderCart() {
+  const keys = Object.keys(cart);
+  const ce   = document.getElementById('ce');
+  const ci   = document.getElementById('citems');
+  const nw   = document.getElementById('cnote-wrap');
+  const sv   = document.getElementById('sv-btn');
+  if (!keys.length) {
+    ce.style.display  = 'flex';
+    ci.innerHTML      = '';
+    nw.style.display  = 'none';
+    sv.disabled       = true;
+    return;
+  }
+  ce.style.display = 'none';
+  nw.style.display = 'block';
+  sv.disabled      = false;
+  ci.innerHTML = keys.map(k => {
+    const it = cart[k];
+    return `<div class="ci" id="ci-${k}">
+      <div class="ci-top">
+        <div class="ci-name">${it.d.name}${it.manual ? '<br><span class="ci-tag">добавлено вручную</span>' : ''}</div>
+        <button class="ci-del" onclick="removeC('${k}')">✕</button>
+      </div>
+      <div class="ci-bot">
+        <div class="pe">
+          <div class="qc">
+            <button class="qb" onclick="chQC('${k}',-1)">−</button>
+            <div class="qv">${it.q}</div>
+            <button class="qb" onclick="chQC('${k}',1)">+</button>
+          </div>
+          <span class="pl" style="margin:0 4px">×</span>
+          <input class="pi" type="number" value="${it.p.toFixed(2)}" step="0.5" min="0"
+                 onchange="chPrice('${k}',this.value)"/>
+          <span class="pl">BYN</span>
+        </div>
+        <div class="ct" id="lt-${k}">= ${(it.q * it.p).toFixed(2)} BYN</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Синхронизация ─────────────────────────────────────
+function upd() {
+  const keys      = Object.keys(cart);
+  const totalQty  = keys.reduce((s, k) => s + cart[k].q, 0);
+  const sub       = keys.reduce((s, k) => s + cart[k].q * cart[k].p, 0);
+  const dcost     = delivType === 'Доставка' ? (parseFloat(document.getElementById('o-dcost')?.value) || 0) : 0;
+  const total     = sub + dcost;
+  document.getElementById('bdg').textContent = totalQty;
+  document.getElementById('bdg').classList.toggle('on', totalQty > 0);
+  document.getElementById('c-total').textContent = total.toFixed(2).replace('.', ',');
+  document.getElementById('st-pos').textContent  = keys.length;
+  document.getElementById('st-qty').textContent  = totalQty;
+  document.getElementById('st-sum').textContent  = sub.toFixed(2);
+  document.getElementById('hdr-sum').textContent = total > 0 ? total.toFixed(2) + ' BYN' : '';
+  renderCart();
+}
+
+function syncHeader() {
+  const d = document.getElementById('o-date').value;
+  const c = document.getElementById('o-client').value;
+  const ds = d ? d.split('-').reverse().join('.') : '—';
+  document.getElementById('hdr-meta').textContent = ds + ' · ' + (c || 'Клиент не указан');
+  upd();
+}
+
+// ── Сохранение → отправка в бот ──────────────────────
+function saveOrder() {
+  const date   = document.getElementById('o-date').value;
+  const client = document.getElementById('o-client').value.trim();
+  if (!date)   { showToast('Укажите дату мероприятия'); return; }
+  if (!client) { showToast('Укажите имя клиента');      return; }
+  const keys   = Object.keys(cart);
+  if (!keys.length) { showToast('Корзина пуста'); return; }
+
+  const dcost = delivType === 'Доставка' ? (parseFloat(document.getElementById('o-dcost')?.value) || 0) : 0;
+
+  const payload = {
+    client,
+    contact:       document.getElementById('o-contact').value,
+    event_date:    date.split('-').reverse().join('.'),
+    event_time:    document.getElementById('o-time').value || '',
+    delivery_type: delivType,
+    address:       delivType === 'Доставка' ? (document.getElementById('o-addr').value || '') : 'Самовывоз',
+    delivery:      dcost,
+    prepayment:    prepay,
+    note:          document.getElementById('c-note')?.value || '',
+    dishes:        keys.map(k => ({
+      name:  cart[k].d.name,
+      qty:   cart[k].q,
+      price: cart[k].p,
+      cost:  0,
+    })),
+  };
+
+  if (twa) {
+    twa.sendData(JSON.stringify(payload));
+    // Web App закроется автоматически после sendData
+  } else {
+    // Отладка вне Telegram
+    console.log('payload →', payload);
+    showToast('✓ Данные в консоли (тест вне Telegram)');
+  }
+}
+
+// ── Запуск ────────────────────────────────────────────
+document.getElementById('o-date').addEventListener('input', syncHeader);
+document.getElementById('o-client').addEventListener('input', syncHeader);
+
+loadCache();
+</script>
+</body>
+</html>
