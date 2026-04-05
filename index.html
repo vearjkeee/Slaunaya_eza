@@ -682,15 +682,13 @@ function syncHeader() {
 
 // ── Сохранение → отправка в бот ──────────────────────
 function saveOrder() {
-  alert('saveOrder вызван. cart keys: ' + Object.keys(cart).length + ', date: ' + document.getElementById('o-date').value + ', client: ' + document.getElementById('o-client').value);
   const date   = document.getElementById('o-date').value;
   const client = document.getElementById('o-client').value.trim();
   const keys   = Object.keys(cart);
 
-  // Показываем что именно не так
-  if (!date)         { alert('Укажите дату мероприятия'); return; }
-  if (!client)       { alert('Укажите имя клиента');      return; }
-  if (!keys.length)  { alert('Корзина пуста');            return; }
+  if (!date)        { alert('Укажите дату мероприятия'); return; }
+  if (!client)      { alert('Укажите имя клиента');      return; }
+  if (!keys.length) { alert('Корзина пуста');            return; }
 
   const dcost = delivType === 'Доставка'
     ? (parseFloat(document.getElementById('o-dcost')?.value) || 0)
@@ -716,11 +714,6 @@ function saveOrder() {
     })),
   };
 
-  console.log('twa object:', twa);
-  console.log('payload:', JSON.stringify(payload));
-
-  alert('twa: ' + (twa ? 'есть' : 'нет') + ', sendData: ' + (twa?.sendData ? 'есть' : 'нет') + ', isExpanded: ' + (twa?.isExpanded));
-  
   if (twa && twa.sendData) {
     twa.sendData(JSON.stringify(payload));
   } else {
