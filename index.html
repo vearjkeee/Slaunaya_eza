@@ -294,7 +294,7 @@ textarea{height:auto;padding:8px 10px;resize:none}
           <span class="total-l">Итого</span>
           <span class="total-v"><span id="c-total">0,00</span> BYN</span>
         </div>
-        <button class="sv" id="sv-btn" onclick="saveOrder()" disabled>Сохранить заказ</button>
+        <button class="sv" id="sv-btn" onclick="saveOrder()">Сохранить заказ</button>
       </div>
     </div>
 
@@ -682,6 +682,7 @@ function syncHeader() {
 
 // ── Сохранение → отправка в бот ──────────────────────
 function saveOrder() {
+  alert('saveOrder вызван. cart keys: ' + Object.keys(cart).length + ', date: ' + document.getElementById('o-date').value + ', client: ' + document.getElementById('o-client').value);
   const date   = document.getElementById('o-date').value;
   const client = document.getElementById('o-client').value.trim();
   const keys   = Object.keys(cart);
