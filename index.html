@@ -719,6 +719,8 @@ function saveOrder() {
   console.log('twa object:', twa);
   console.log('payload:', JSON.stringify(payload));
 
+  alert('twa: ' + (twa ? 'есть' : 'нет') + ', sendData: ' + (twa?.sendData ? 'есть' : 'нет') + ', isExpanded: ' + (twa?.isExpanded));
+  
   if (twa && twa.sendData) {
     twa.sendData(JSON.stringify(payload));
   } else {
