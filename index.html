@@ -431,34 +431,76 @@ function setPay(v, btn) {
 }
 
 // ── AI импорт ─────────────────────────────────────────
-function parseAI() {
+async function parseAI() {
   const txt = document.getElementById('ai-txt').value.trim();
   if (!txt) { showToast('Вставьте сообщение клиента'); return; }
+
   const btn = document.querySelector('.ai-btn');
   btn.textContent = '⟳ Разбираю...';
   btn.disabled = true;
 
-  // TODO: здесь будет реальный вызов Groq API через бота
-  // Пока демо-режим с мок-данными (показывает логику интерфейса)
-  const mock = MENU.length >= 3 ? [
-    { m: MENU[0], q: 2 },
-    { m: MENU[1], q: 1 },
-    { m: MENU[2], q: 2, note: 'Уточнить детали' },
-  ] : [];
+  try {
+    const menuList = MENU.map(d => `${d.id}|${d.name}|${d.price}`).join('\n');
 
-  setTimeout(() => {
-    btn.textContent = '✦ Разобрать через AI';
-    btn.disabled = false;
-    if (!mock.length) { showToast('Меню не загружено'); return; }
+    const prompt = `Ты помощник для кейтеринг-бизнеса. Клиент написал сообщение с заказом.
+Вот список доступных блюд (id|название|цена):
+${menuList}
+
+Сообщение клиента:
+${txt}
+
+Задача: найди в сообщении блюда и сопоставь их с меню. Верни ТОЛЬКО JSON массив, без пояснений:
+[{"id": "1", "name": "Название из меню", "qty": 2, "note": "уточнение если есть или пустая строка"}]
+
+Правила:
+- qty это количество порций (число)
+- Если блюдо не найдено точно — выбери наиболее похожее
+- note заполняй только если клиент написал уточнение (без томатов, острое и т.д.)
+- Возвращай только JSON, никакого текста вокруг`;
+
+    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': 'Bearer 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',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        max_tokens: 1000,
+      }),
+    });
+
+    const data  = await resp.json();
+    const raw   = data.choices?.[0]?.message?.content || '[]';
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const items = JSON.parse(clean);
+
+    if (!items.length) {
+      showToast('Блюда не распознаны — добавьте вручную');
+      return;
+    }
+
     const res = document.getElementById('ai-res');
     res.style.display = 'block';
-    res.innerHTML = `<div class="ai-hint">Найдено ${mock.length} позиций — нажмите + для добавления</div>` +
-      mock.map((p, i) => `
+    res.innerHTML = `<div class="ai-hint">Найдено ${items.length} позиций</div>` +
+      items.map((p, i) => `
         <div class="ai-row">
-          <div class="ai-name">${p.m.name} × ${p.q}${p.note ? `<br><span class="ai-note">${p.note}</span>` : ''}</div>
-          <button class="ai-add" id="ai-b-${i}" onclick="aiAdd('${p.m.id}',${p.q},${i})">+ корзина</button>
+          <div class="ai-name">${p.name} × ${p.qty}
+            ${p.note ? `<br><span class="ai-note">${p.note}</span>` : ''}
+          </div>
+          <button class="ai-add" id="ai-b-${i}"
+            onclick="aiAdd('${p.id}', ${p.qty}, ${i})">+ корзина</button>
         </div>`).join('');
-  }, 900);
+
+  } catch(e) {
+    console.error('AI error:', e);
+    showToast('Ошибка AI: ' + e.message);
+  } finally {
+    btn.textContent = '✦ Разобрать через AI';
+    btn.disabled = false;
+  }
 }
 
 function aiAdd(id, q, i) {
@@ -642,12 +684,16 @@ function syncHeader() {
 function saveOrder() {
   const date   = document.getElementById('o-date').value;
   const client = document.getElementById('o-client').value.trim();
-  if (!date)   { showToast('Укажите дату мероприятия'); return; }
-  if (!client) { showToast('Укажите имя клиента');      return; }
   const keys   = Object.keys(cart);
-  if (!keys.length) { showToast('Корзина пуста'); return; }
 
-  const dcost = delivType === 'Доставка' ? (parseFloat(document.getElementById('o-dcost')?.value) || 0) : 0;
+  // Показываем что именно не так
+  if (!date)         { alert('Укажите дату мероприятия'); return; }
+  if (!client)       { alert('Укажите имя клиента');      return; }
+  if (!keys.length)  { alert('Корзина пуста');            return; }
+
+  const dcost = delivType === 'Доставка'
+    ? (parseFloat(document.getElementById('o-dcost')?.value) || 0)
+    : 0;
 
   const payload = {
     client,
@@ -655,7 +701,9 @@ function saveOrder() {
     event_date:    date.split('-').reverse().join('.'),
     event_time:    document.getElementById('o-time').value || '',
     delivery_type: delivType,
-    address:       delivType === 'Доставка' ? (document.getElementById('o-addr').value || '') : 'Самовывоз',
+    address:       delivType === 'Доставка'
+                     ? (document.getElementById('o-addr').value || '')
+                     : 'Самовывоз',
     delivery:      dcost,
     prepayment:    prepay,
     note:          document.getElementById('c-note')?.value || '',
@@ -667,13 +715,13 @@ function saveOrder() {
     })),
   };
 
-  if (twa) {
+  console.log('twa object:', twa);
+  console.log('payload:', JSON.stringify(payload));
+
+  if (twa && twa.sendData) {
     twa.sendData(JSON.stringify(payload));
-    // Web App закроется автоматически после sendData
   } else {
-    // Отладка вне Telegram
-    console.log('payload →', payload);
-    showToast('✓ Данные в консоли (тест вне Telegram)');
+    alert('Ошибка: Web App не инициализирован. Открой через Telegram.');
   }
 }
 
