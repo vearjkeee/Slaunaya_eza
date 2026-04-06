@@ -682,42 +682,56 @@ function syncHeader() {
 
 // ── Сохранение → отправка в бот ──────────────────────
 function saveOrder() {
-  const date   = document.getElementById('o-date').value;
-  const client = document.getElementById('o-client').value.trim();
-  const keys   = Object.keys(cart);
+  try {
+    const dateInput = document.getElementById('o-date').value;
+    const client = document.getElementById('o-client').value.trim();
+    const keys = Object.keys(cart);
 
-  if (!date)        { alert('Укажите дату мероприятия'); return; }
-  if (!client)      { alert('Укажите имя клиента');      return; }
-  if (!keys.length) { alert('Корзина пуста');            return; }
+    if (!dateInput) { alert('Укажите дату мероприятия'); return; }
+    if (!client)    { alert('Укажите имя клиента');      return; }
+    if (!keys.length) { alert('Корзина пуста');          return; }
 
-  const dcost = delivType === 'Доставка'
-    ? (parseFloat(document.getElementById('o-dcost')?.value) || 0)
-    : 0;
+    // Безопасное получение стоимости доставки
+    let dcost = 0;
+    if (delivType === 'Доставка') {
+      const val = document.getElementById('o-dcost').value;
+      dcost = val ? parseFloat(val) : 0;
+    }
 
-  const payload = {
-    client,
-    contact:       document.getElementById('o-contact').value,
-    event_date:    date.split('-').reverse().join('.'),
-    event_time:    document.getElementById('o-time').value || '',
-    delivery_type: delivType,
-    address:       delivType === 'Доставка'
-                     ? (document.getElementById('o-addr').value || '')
-                     : 'Самовывоз',
-    delivery:      dcost,
-    prepayment:    prepay,
-    note:          document.getElementById('c-note')?.value || '',
-    dishes:        keys.map(k => ({
-      name:  cart[k].d.name,
-      qty:   cart[k].q,
-      price: cart[k].p,
-      cost:  0,
-    })),
-  };
+    const payload = {
+      client: client,
+      contact: document.getElementById('o-contact').value || "",
+      event_date: dateInput.split('-').reverse().join('.'), // ГГГГ-ММ-ДД -> ДД.ММ.ГГГГ
+      event_time: document.getElementById('o-time').value || '',
+      delivery_type: delivType,
+      address: delivType === 'Доставка' ? (document.getElementById('o-addr').value || 'Не указан') : 'Самовывоз',
+      delivery: dcost,
+      prepayment: !!prepay,
+      note: document.getElementById('c-note').value || '',
+      dishes: keys.map(k => ({
+        name:  cart[k].d.name,
+        qty:   parseInt(cart[k].q) || 0,
+        price: parseFloat(cart[k].p) || 0,
+        cost:  0
+      }))
+    };
 
-  if (twa && twa.sendData) {
-    twa.sendData(JSON.stringify(payload));
-  } else {
-    alert('Ошибка: Web App не инициализирован. Открой через Telegram.');
+    console.log("Sending payload:", payload);
+
+    if (window.Telegram && window.Telegram.WebApp) {
+      const twa = window.Telegram.WebApp;
+      
+      // Проверка: разрешено ли отправлять данные
+      // Если Web App открыт через Inline кнопку, метод может не сработать
+      twa.sendData(JSON.stringify(payload)); 
+      
+      // Дополнительно: пробуем закрыть окно вручную, если sendData не закрыл
+      twa.close(); 
+    } else {
+      alert("Ошибка: Запущено вне Telegram");
+    }
+  } catch (err) {
+    alert("Ошибка при сохранении: " + err.message);
   }
 }
 
