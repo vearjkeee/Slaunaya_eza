@@ -1,5 +1,5 @@
 {
-  "updated": "10.05.2026 12:50",
+  "updated": "10.05.2026 12:55",
   "menu": [
     {
       "id": "1",
@@ -1631,7 +1631,7 @@
       "total": 100.0,
       "cost": 0.0,
       "profit": 95.0,
-      "status": "🆕 Новый",
+      "status": "✅ Подтверждён",
       "prepayment": true,
       "note": "",
       "dishes": [
