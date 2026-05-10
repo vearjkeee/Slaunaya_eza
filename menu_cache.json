@@ -1,5 +1,5 @@
 {
-  "updated": "10.05.2026 15:10",
+  "updated": "10.05.2026 15:25",
   "menu": [
     {
       "id": "1",
@@ -1650,43 +1650,6 @@
         }
       ],
       "dishes_count": 1
-    },
-    {
-      "row": 23,
-      "id": "22",
-      "client": "Дмитрий",
-      "contact": "Телеграм",
-      "date_order": "10.05.2026",
-      "event_date": "13.05.2026",
-      "event_time": "",
-      "address": "Городище",
-      "delivery_type": "Доставка",
-      "delivery": 0.0,
-      "discount_percent": 10.0,
-      "discount_amount": 1.95,
-      "total": 17.55,
-      "cost": 0.0,
-      "profit": 17.55,
-      "status": "🆕 Новый",
-      "prepayment": true,
-      "note": "Не люблю капусту",
-      "dishes": [
-        {
-          "name": "Холодник (400 мл)",
-          "qty": 1,
-          "price": 5.5,
-          "cost": 0.0,
-          "unit": "порц."
-        },
-        {
-          "name": "Борщ (400 мл)",
-          "qty": 2,
-          "price": 7.0,
-          "cost": 0.0,
-          "unit": "порц."
-        }
-      ],
-      "dishes_count": 2
     }
   ],
   "archive_orders": [
@@ -2266,6 +2229,40 @@
         }
       ],
       "dishes_count": 1
+    },
+    {
+      "row": 23,
+      "id": "22",
+      "client": "Дмитрий",
+      "contact": "Телеграм",
+      "event_date": "13.05.2026",
+      "event_time": "",
+      "address": "Городище",
+      "delivery_type": "Доставка",
+      "delivery": 0.0,
+      "discount_percent": 10.0,
+      "discount_amount": 1.95,
+      "total": 17.55,
+      "status": "❌ Отменён",
+      "prepayment": true,
+      "note": "Не люблю капусту",
+      "dishes": [
+        {
+          "name": "Холодник (400 мл)",
+          "qty": 1,
+          "price": 5.5,
+          "cost": 0.0,
+          "unit": "порц."
+        },
+        {
+          "name": "Борщ (400 мл)",
+          "qty": 2,
+          "price": 7.0,
+          "cost": 0.0,
+          "unit": "порц."
+        }
+      ],
+      "dishes_count": 2
     },
     {
       "row": 13,
