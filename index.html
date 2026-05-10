@@ -659,6 +659,9 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 // ══════════════════════════════════════════════════════════
 // КОНФИГ
 // ══════════════════════════════════════════════════════════
+// GAS_URL — вставить после деплоя Google Apps Script.
+// Если пустой — используется GitHub-кеш как fallback.
+const GAS_URL    = "https://script.google.com/macros/s/AKfycbyIU0ZsLjgmyuVhpsSiWm9ON9SrP2WGd2o7qpNuSSKIElYZAPpPzh6BrjSbn0qMD1kj/exec"
 const CACHE_URL  = "https://vearjkeee.github.io/Slaunaya_eza/menu_cache.json";
 const WEBAPP_URL = "https://vearjkeee.github.io/Slaunaya_eza/index.html";
 
@@ -714,31 +717,68 @@ let editingDishId   = null; // null = новое блюдо
 // ══════════════════════════════════════════════════════════
 // ЗАГРУЗКА КЭША
 // ══════════════════════════════════════════════════════════
-async function loadCache(force = false) {
-  try {
-    const url = CACHE_URL + '?t=' + (force ? Date.now() : Math.floor(Date.now() / 60000));
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(r.status);
-    const data = await r.json();
-    MENU           = data.menu    || [];
-    CLIENTS        = data.clients || [];
-    ACTIVE_ORDERS  = data.active_orders  || [];
-    ARCHIVE_ORDERS = data.archive_orders || [];
-    SHOPPING       = data.shopping_list  || [];
-    const upd = data.updated || '';
-    document.getElementById('cache-time').textContent  = upd ? 'Обновлено: ' + upd : '';
-    document.getElementById('cache-time2').textContent = upd ? 'Обновлено: ' + upd : '';
-  } catch(e) {
-    console.warn('Cache load error:', e);
-    showToast('⚠️ Нет соединения — данные могут быть устаревшими');
+// ── Источник данных: GAS (приоритет) или GitHub-кеш (fallback) ──
+async function fetchData(force = false) {
+  // 1. Пробуем GAS — данные почти в реальном времени
+  if (GAS_URL) {
+    try {
+      const url = GAS_URL + "?action=getData" + (force ? "&t=" + Date.now() : "");
+      const r   = await fetch(url, { redirect: "follow" });
+      if (r.ok) {
+        const data = await r.json();
+        if (!data.error) return { data, source: data._cached ? "gas-cache" : "gas-live" };
+      }
+    } catch(e) {
+      console.warn("GAS fetch error:", e);
+    }
   }
+
+  // 2. Fallback — GitHub Pages кеш (обновляется каждые 5 мин ботом)
+  try {
+    const url = CACHE_URL + "?t=" + (force ? Date.now() : Math.floor(Date.now() / 60000));
+    const r   = await fetch(url);
+    if (r.ok) {
+      const data = await r.json();
+      return { data, source: "github" };
+    }
+  } catch(e) {
+    console.warn("GitHub cache error:", e);
+  }
+
+  return null;
+}
+
+function applyData(data) {
+  MENU           = data.menu           || [];
+  CLIENTS        = data.clients        || [];
+  ACTIVE_ORDERS  = data.active_orders  || [];
+  ARCHIVE_ORDERS = data.archive_orders || [];
+  SHOPPING       = data.shopping_list  || [];
+}
+
+async function loadCache(force = false) {
+  const result = await fetchData(force);
+  if (!result) {
+    showToast("⚠️ Нет соединения — данные могут быть устаревшими");
+    return;
+  }
+  applyData(result.data);
+
+  const upd    = result.data.updated || "";
+  const srcLbl = result.source === "gas-live"   ? " · 🟢 онлайн"
+               : result.source === "gas-cache"  ? " · 🟡 кеш GAS"
+               : " · ⚪ кеш GitHub";
+  const label  = upd ? "Обновлено: " + upd + srcLbl : srcLbl;
+
+  document.getElementById("cache-time").textContent  = label;
+  document.getElementById("cache-time2").textContent = label;
 }
 
 async function forceReload() {
-  showToast('⟳ Обновляю…');
+  showToast("⟳ Обновляю…");
   await loadCache(true);
   renderCurrentTab();
-  showToast('✓ Данные обновлены');
+  showToast("✓ Данные обновлены");
 }
 
 // ══════════════════════════════════════════════════════════
