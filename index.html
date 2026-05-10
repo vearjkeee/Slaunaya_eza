@@ -885,22 +885,25 @@ function findOrder(row) {
   return ACTIVE_ORDERS.find(o => o.row == row) || ARCHIVE_ORDERS.find(o => o.row == row);
 }
 
+function fmtQty(q) {
+  q = parseFloat(q);
+  return (q === Math.floor(q)) ? String(Math.floor(q)) : String(q);
+}
+
 function renderOrderDetail(order) {
   const isActive = ACTIVE_ORDERS.some(o => o.row == order.row);
-  const dishes = order.dishes || [];
-  const sc = statusClass(order.status);
+  const dishes   = order.dishes || [];
+  const sc       = statusClass(order.status);
 
-  // Считаем суммы
-  const sub = dishes.reduce((s,d) => s + (+d.price||0)*(+d.qty||0), 0);
+  const sub      = dishes.reduce((s,d) => s + (+d.price||0)*(+d.qty||0), 0);
   const delivery = +order.delivery || 0;
-  const discP = +order.discount_percent || 0;
-  const discA = +(order.discount_amount || (sub * discP / 100).toFixed(2));
-  const total = +order.total || (sub - discA + delivery);
+  const discP    = +order.discount_percent || 0;
+  const discA    = discP > 0 ? +(order.discount_amount || (sub*discP/100).toFixed(2)) : 0;
+  const total    = +order.total || (sub - discA + delivery);
   const prepayAmt = (total/2).toFixed(2);
-
   let html = '';
 
-  // Статус + действия
+  // ── Статус ──────────────────────────────────────────
   html += `<div class="sec" style="margin-top:12px">
     <div class="sec-hdr">Статус</div>
     <div class="sec-body">
@@ -912,20 +915,21 @@ function renderOrderDetail(order) {
     </div>
   </div>`;
 
-  // Кнопки действий
+  // ── Кнопки действий ─────────────────────────────────
   if (isActive) {
+    const addr = encodeURIComponent(order.address || '');
     html += `<div class="actions cols2">
       <button class="act-btn ab-blue" onclick="genReceipt(${order.row})">
         <span class="act-ico">📄</span>Предчек
       </button>
-      <button class="act-btn ab-grn" onclick="openMap('${esc(order.address||'')}')">
+      <button class="act-btn ab-grn" onclick="openMapChoice('${addr}')">
         <span class="act-ico">🗺</span>Маршрут
       </button>
       <button class="act-btn ab-ghost" onclick="contactClient('${esc(order.contact||'')}')">
         <span class="act-ico">💬</span>Связаться
       </button>
-      <button class="act-btn ab-red" onclick="confirmCancel(${order.row})">
-        <span class="act-ico">❌</span>Отменить
+      <button class="act-btn ab-red" onclick="openStatusModal(${order.row})">
+        <span class="act-ico">⚡</span>Статус
       </button>
     </div>`;
   } else {
@@ -936,38 +940,59 @@ function renderOrderDetail(order) {
     </div>`;
   }
 
-  // Инфо
+  // ── Информация ──────────────────────────────────────
   html += `<div class="sec">
     <div class="sec-hdr">Информация</div>
     <div class="sec-body">
-      <div class="row-item"><div class="ri-ico">👤</div><div class="ri-body"><div class="ri-label">${esc(order.client)}</div><div class="ri-sub">Клиент</div></div></div>
-      ${order.contact?`<div class="row-item"><div class="ri-ico">📱</div><div class="ri-body"><div class="ri-label">${esc(order.contact)}</div><div class="ri-sub">Способ связи</div></div></div>`:''}
-      <div class="row-item"><div class="ri-ico">📅</div><div class="ri-body"><div class="ri-label">${esc(order.event_date||'—')}${order.event_time?' в '+esc(order.event_time):''}</div><div class="ri-sub">Дата мероприятия</div></div></div>
-      <div class="row-item"><div class="ri-ico">🚗</div><div class="ri-body"><div class="ri-label">${esc(order.delivery_type||'—')}</div>${order.address?`<div class="ri-sub">${esc(order.address)}</div>`:''}</div></div>
-      ${order.note?`<div class="row-item"><div class="ri-ico">📝</div><div class="ri-body"><div class="ri-label">${esc(order.note)}</div><div class="ri-sub">Примечание</div></div></div>`:''}
+      <div class="row-item">
+        <div class="ri-ico">👤</div>
+        <div class="ri-body"><div class="ri-label">${esc(order.client)}</div><div class="ri-sub">Клиент</div></div>
+      </div>
+      ${order.contact ? `<div class="row-item"><div class="ri-ico">📱</div><div class="ri-body"><div class="ri-label">${esc(order.contact)}</div><div class="ri-sub">Способ связи</div></div></div>` : ''}
+      <div class="row-item">
+        <div class="ri-ico">📅</div>
+        <div class="ri-body"><div class="ri-label">${esc(order.event_date||'—')}${order.event_time?' в '+esc(order.event_time):''}</div><div class="ri-sub">Дата мероприятия</div></div>
+      </div>
+      <div class="row-item">
+        <div class="ri-ico">🚗</div>
+        <div class="ri-body"><div class="ri-label">${esc(order.delivery_type||'—')}</div>${order.address?`<div class="ri-sub">${esc(order.address)}</div>`:''}</div>
+      </div>
+      ${(order.note && order.note.trim()) ? `
+      <div class="row-item" style="background:rgba(255,248,220,0.7)">
+        <div class="ri-ico">📝</div>
+        <div class="ri-body">
+          <div class="ri-sub" style="margin-bottom:2px">Примечание</div>
+          <div class="ri-label" style="font-size:13px;line-height:1.4;white-space:pre-wrap">${esc(order.note)}</div>
+        </div>
+      </div>` : ''}
     </div>
   </div>`;
 
-  // Блюда
+  // ── Состав — всегда виден ────────────────────────────
   if (dishes.length) {
     html += `<div class="sec">
       <div class="sec-hdr">Состав (${dishes.length} позиций)</div>
       <div class="sec-body" style="padding:0">`;
     dishes.forEach(d => {
-      const lineTotal = ((+d.price||0)*(+d.qty||0)).toFixed(2);
+      const lt = ((+d.price||0)*(+d.qty||0)).toFixed(2);
       html += `<div class="dish-row">
         <div class="dr-name">${esc(d.name)}</div>
-        <div class="dr-qty">×${d.qty} ${esc(d.unit||'')}</div>
-        <div class="dr-price">${lineTotal} BYN</div>
+        <div class="dr-qty">×${fmtQty(d.qty)} ${esc(d.unit||'')}</div>
+        <div class="dr-price">${lt} BYN</div>
       </div>`;
     });
-    html += `<div class="total-block">`;
-    html += `<div class="total-line"><span>Блюда</span><span>${sub.toFixed(2)} BYN</span></div>`;
+    html += `<div class="total-block">
+      <div class="total-line"><span>Блюда</span><span>${sub.toFixed(2)} BYN</span></div>`;
     if (discP > 0) html += `<div class="total-line"><span>Скидка ${discP}%</span><span>−${discA.toFixed(2)} BYN</span></div>`;
     if (delivery > 0) html += `<div class="total-line"><span>Доставка</span><span>${delivery.toFixed(2)} BYN</span></div>`;
     html += `<div class="total-line big"><span>Итого</span><span class="tv">${total.toFixed(2)} BYN</span></div>`;
     if (order.prepayment) html += `<div class="total-line" style="margin-top:4px"><span>Предоплата 50%</span><span>${prepayAmt} BYN</span></div>`;
     html += `</div></div></div>`;
+  } else {
+    html += `<div class="sec"><div class="sec-hdr">Состав</div><div class="sec-body">
+      <div class="row-item"><div class="ri-body"><div class="ri-label" style="color:var(--hint)">
+        Обновите кеш кнопкой ↻ для загрузки состава
+      </div></div></div></div></div>`;
   }
 
   html += `<div style="height:16px"></div>`;
@@ -1011,10 +1036,6 @@ function changeStatus(row, status) {
   showToast('Статус обновлён');
 }
 
-function confirmCancel(row) {
-  openStatusModal(row);
-}
-
 // ══════════════════════════════════════════════════════════
 // ПРЕДЧЕК / МАРШРУТ / СВЯЗЬ
 // ══════════════════════════════════════════════════════════
@@ -1024,10 +1045,23 @@ function genReceipt(row) {
   if (twa) setTimeout(() => twa.close(), 600);
 }
 
-function openMap(address) {
+function openMapChoice(encodedAddr) {
+  const address = decodeURIComponent(encodedAddr || '');
   if (!address || address === 'Самовывоз') { showToast('Адрес не указан'); return; }
-  const url = 'https://maps.google.com/?q=' + encodeURIComponent(address);
-  window.open(url, '_blank');
+  const q = encodeURIComponent(address);
+  const apps = [
+    { name:'Google Карты',     url:`https://maps.google.com/?q=${q}` },
+    { name:'Яндекс Карты',     url:`https://maps.yandex.ru/?text=${q}` },
+    { name:'Яндекс Навигатор', url:`https://yandex.ru/maps/?rtext=~${q}&rtt=auto` },
+  ];
+  const body = document.getElementById('modal-body');
+  body.innerHTML = `<div style="padding:0 12px 16px;display:flex;flex-direction:column;gap:8px">`+
+    apps.map(a=>`<button onclick="window.open('${a.url}','_blank');closeModal()"
+      style="height:46px;border:1px solid var(--border);border-radius:var(--rad-s);background:var(--bg);
+             font-size:15px;font-family:inherit;color:var(--text);cursor:pointer;text-align:left;
+             padding:0 16px">${a.name}</button>`).join('')+
+    `</div>`;
+  document.getElementById('modal').classList.add('on');
 }
 
 function contactClient(contact) {
@@ -1047,7 +1081,6 @@ function openEditOrder() {
   if (!order) return;
   editingRow = order.row;
 
-  // Заполняем форму
   document.getElementById('o-client').value  = order.client || '';
   document.getElementById('o-contact').value = order.contact || '';
   document.getElementById('o-date').value    = dateToISO(order.event_date || '');
@@ -1057,15 +1090,27 @@ function openEditOrder() {
   document.getElementById('o-dcost').value  = order.delivery || '';
   setPay(!!order.prepayment, null, true);
 
-  // Корзина из блюд
+  // Загружаем блюда из полного кеша в корзину
   cart = {};
-  (order.dishes || []).forEach((d, i) => {
-    const id = 'e'+i;
-    cart[id] = { d: {id, name:d.name, cat:''}, q: +d.qty||1, p: +d.price||0, manual: true };
-  });
+  const dishes = order.dishes || [];
+  if (dishes.length) {
+    dishes.forEach((d, i) => {
+      // Ищем блюдо в меню чтобы получить его id
+      const menuDish = MENU.find(m => m.name === d.name);
+      const id = menuDish ? String(menuDish.id) : ('e' + i);
+      cart[id] = {
+        d: { id, name: d.name, cat: menuDish ? (menuDish.cat||'') : '' },
+        q: +d.qty || 1,
+        p: +d.price || 0,
+        manual: !menuDish,
+      };
+    });
+    showToast('Редактирование заказа #' + order.row + ' · ' + dishes.length + ' блюд');
+  } else {
+    showToast('⚠️ Состав не загружен — обновите кеш');
+  }
 
   pushScreen('s-new-details');
-  showToast('Редактирование заказа #' + order.row);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1142,53 +1187,25 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════════════════════
 // AI ИМПОРТ
 // ══════════════════════════════════════════════════════════
-async function runAI() {
+function runAI() {
   const txt = document.getElementById('ai-txt').value.trim();
   if (!txt) { showToast('Вставьте сообщение клиента'); return; }
-  const btn = document.getElementById('ai-go-btn');
-  btn.textContent = '⟳ Разбираю…';
-  btn.disabled = true;
-  try {
-    const menuList = MENU.slice(0,150).map(d => `${d.id}|${d.name}|${d.price}`).join('\n');
-    const prompt = `Ты помощник кейтеринг-сервиса. Найди блюда в тексте.\nМЕНЮ (id|название|цена):\n${menuList}\n\nТекст: ${txt}\n\nВерни ТОЛЬКО JSON:\n[{"id":"1","name":"Название","qty":2,"note":""}]`;
-    const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${getGroqKey()}` },
-      body: JSON.stringify({ model:'llama-3.3-70b-versatile', messages:[{role:'user',content:prompt}], temperature:0.1, max_tokens:800 })
-    });
-    const data = await resp.json();
-    const raw = data.choices?.[0]?.message?.content || '[]';
-    const items = JSON.parse(raw.replace(/```json|```/g,'').trim());
-    if (!items.length) { showToast('Блюда не распознаны'); return; }
-    const res = document.getElementById('ai-res');
-    res.style.display = 'block';
-    res.innerHTML = `<div class="ai-hint">Найдено ${items.length} позиций</div>` +
-      items.map((p,i) => `<div class="ai-row">
-        <div class="ai-rn">${esc(p.name)} × ${p.qty}${p.note?`<br><small style="color:var(--hint)">${esc(p.note)}</small>`:''}</div>
-        <button class="ai-add-btn" id="aib-${i}" onclick="aiAdd('${esc(p.id)}',${p.qty},${i})">+ Добавить</button>
-      </div>`).join('');
-  } catch(e) {
-    showToast('Ошибка AI: ' + e.message);
-  } finally {
-    btn.textContent = '✦ Разобрать через AI';
-    btn.disabled = false;
-  }
+  // Генерируем уникальный request_id
+  const request_id = 'ai_' + Date.now();
+  // Сохраняем в sessionStorage чтобы подхватить при возврате
+  sessionStorage.setItem('pending_ai_id', request_id);
+  // Отправляем в бота и закрываем Web App
+  sendToBot({ action: 'ai_request', text: txt, request_id });
+  showToast('🤖 Отправлено боту, ожидайте ответа');
+  // Бот ответит с кнопкой ?ai_result=ID которая откроет нас снова
+  if (twa) setTimeout(() => twa.close(), 600);
 }
 
-function getGroqKey() {
-  // Ключ приходит из кэша или задаётся здесь
-  return '';
-}
-
-function aiAdd(id, q, i) {
-  const d = MENU.find(m => String(m.id) === String(id));
-  if (!d) return;
-  if (!cart[id]) cart[id] = { d:{id,name:d.name,cat:d.cat||''}, q:0, p:+d.price||0 };
-  cart[id].q = q;
-  const b = document.getElementById('aib-'+i);
-  if (b) { b.textContent = '✓'; b.classList.add('done'); b.disabled = true; }
-  updCart();
-  showToast('Добавлено в корзину');
+// Загружает AI-результат из кеша по request_id (приходит в URL)
+async function loadAIResult(request_id) {
+  // Данные хранятся в кеше GitHub в поле ai_results (если бот туда пишет)
+  // Пока используем простой fallback — показываем инструкцию
+  showToast('Результат AI получен — добавьте блюда вручную или из распознанного списка');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1596,9 +1613,10 @@ function saveDishEdit() {
 // URL PARAMS — открываем нужный экран по параметру
 // ══════════════════════════════════════════════════════════
 function handleURLParams() {
-  const params = new URLSearchParams(window.location.search);
-  const editRow = params.get('edit');
+  const params   = new URLSearchParams(window.location.search);
+  const editRow  = params.get('edit');
   const tabParam = params.get('tab');
+  const aiResult = params.get('ai_result');
 
   if (tabParam === 'shopping') {
     switchTab('shopping', document.querySelector('.tb:nth-child(3)'));
@@ -1606,7 +1624,6 @@ function handleURLParams() {
   }
 
   if (editRow) {
-    // Нужно отредактировать заказ
     setTimeout(() => {
       const row = parseInt(editRow);
       currentOrderRow = row;
@@ -1616,6 +1633,13 @@ function handleURLParams() {
         setTimeout(openEditOrder, 100);
       }
     }, 300);
+    return;
+  }
+
+  if (aiResult) {
+    // Возврат после AI — переходим на вкладку Новый заказ
+    switchTab('new', document.querySelector('.tb:nth-child(2)'));
+    showToast('🤖 AI обработал запрос — проверьте результат в боте и добавьте блюда');
   }
 }
 
