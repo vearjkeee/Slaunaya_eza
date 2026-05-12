@@ -185,11 +185,18 @@ function orderCardHTML(o, withSwipe) {
   const isActive = ["🆕 Новый","✅ Подтверждён","🍳 Готовится"].includes(o.status);
 
   const urgBar  = urg ? `<div class="urgency-bar ${urg}"></div>` : '';
-  const dateRow = `<div class="oc-dates">` +
-    (o.date_order ? `Создан ${shortDate(o.date_order)}` : '') +
-    (o.date_order && o.event_date ? ' &nbsp;·&nbsp; ' : '') +
-    (o.event_date ? `Доставка ${shortDate(o.event_date)}${o.event_time ? ' в ' + esc(o.event_time) : ''}` : '') +
-    `</div>`;
+  
+  // === НОВЫЙ БЛОК ДАТ ===
+  const dateCreated = o.date_order 
+    ? `<div class="oc-d-create">📝 Создан ${shortDate(o.date_order)}</div>` 
+    : '';
+    
+  const dateDelivery = o.event_date 
+    ? `<div class="oc-d-deliv">📅 Доставка: <span class="hl">${shortDate(o.event_date)}${o.event_time ? ' в ' + esc(o.event_time) : ''}</span></div>` 
+    : '';
+    
+  const dateRow = `<div class="oc-dates">${dateCreated}${dateDelivery}</div>`;
+  // ======================
 
   const swipeWrap  = withSwipe && isActive ? `<div class="swipe-action" data-row="${o.row}"><span class="sa-ico">✔️</span>Готово</div>` : '';
   const cardInner  = `<div class="order-card" data-row="${o.row}" onclick="openOrderDetail(${o.row})">
