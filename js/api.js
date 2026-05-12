@@ -4,7 +4,7 @@
 // ══════════════════════════════════════════════════════════
 
 // ── Заполнить после деплоя GAS ────────────────────────────
-const GAS_URL   = "";  // "https://script.google.com/macros/s/ВАШ_ID/exec"
+const GAS_URL   = "https://script.google.com/macros/s/AKfycbz3sodPD-Wj-6jyhqHon2vLx403H1ZDca3PrLRl1VokqezcChVHb1V_rj6yZqyAgk66/exec";  // "https://script.google.com/macros/s/ВАШ_ID/exec"
 const CACHE_URL = "https://vearjkeee.github.io/Slaunaya_eza/menu_cache.json";
 
 // ── Telegram Web App ──────────────────────────────────────
