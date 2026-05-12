@@ -5,318 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <title>Slaŭnaya Eža</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<style>
-/* ══ RESET & BASE ══════════════════════════════════════ */
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif}
-
-/* ══ ТЕМА ══════════════════════════════════════════════ */
-:root{
-  --bg:        var(--tg-theme-bg-color,#ffffff);
-  --bg2:       var(--tg-theme-secondary-bg-color,#f4f4f4);
-  --text:      var(--tg-theme-text-color,#111111);
-  --hint:      var(--tg-theme-hint-color,#888888);
-  --link:      var(--tg-theme-link-color,#2481cc);
-  --btn:       var(--tg-theme-button-color,#D85A30);
-  --btn-t:     var(--tg-theme-button_text_color,#ffffff);
-  --acc:       #D85A30;
-  --acc-l:     rgba(216,90,48,0.10);
-  --acc-d:     #b84620;
-  --grn:       #2a7d3f;
-  --grn-l:     rgba(42,125,63,0.12);
-  --red:       #c0392b;
-  --red-l:     rgba(192,57,43,0.10);
-  --blue:      #2471a3;
-  --blue-l:    rgba(36,113,163,0.10);
-  --border:    rgba(0,0,0,0.10);
-  --shadow:    0 1px 4px rgba(0,0,0,0.08);
-  --rad:       12px;
-  --rad-s:     8px;
-
-  /* статусы */
-  --s-new:     #2471a3;
-  --s-new-l:   rgba(36,113,163,0.12);
-  --s-conf:    #1a7a3a;
-  --s-conf-l:  rgba(26,122,58,0.12);
-  --s-cook:    #b07d10;
-  --s-cook-l:  rgba(176,125,16,0.12);
-  --s-done:    #555555;
-  --s-done-l:  rgba(85,85,85,0.10);
-  --s-canc:    #c0392b;
-  --s-canc-l:  rgba(192,57,43,0.10);
-}
-
-/* ══ СТРУКТУРА ════════════════════════════════════════ */
-#app{display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--bg2)}
-.tab-bar{flex-shrink:0;display:flex;background:var(--bg);border-top:0.5px solid var(--border);padding-bottom:env(safe-area-inset-bottom);z-index:50}
-.tb{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 0 6px;border:none;background:transparent;color:var(--hint);font-size:10px;cursor:pointer;font-family:inherit;position:relative;transition:color .15s}
-.tb.on{color:var(--acc)}
-.tb-ico{font-size:22px;line-height:1}
-.tb-bdg{position:absolute;top:3px;right:calc(50% - 18px);background:var(--acc);color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center;display:none}
-.tb-bdg.on{display:block}
-
-/* ══ ЭКРАНЫ ═══════════════════════════════════════════ */
-.screens{flex:1;overflow:hidden;position:relative}
-.scr{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .2s ease;background:var(--bg2)}
-.scr.on{transform:translateX(0)}
-.scr.back{transform:translateX(-30%)}
-
-/* ══ ШАПКА ════════════════════════════════════════════ */
-.hdr{flex-shrink:0;background:var(--bg);border-bottom:0.5px solid var(--border);display:flex;align-items:center;padding:0 4px 0 0;min-height:48px}
-.hdr-back{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--acc);font-size:20px;cursor:pointer;flex-shrink:0}
-.hdr-body{flex:1;padding:8px 0 8px 12px;min-width:0}
-.hdr-title{font-size:16px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hdr-sub{font-size:12px;color:var(--hint);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hdr-action{flex-shrink:0;padding:8px}
-.hdr-btn{height:34px;padding:0 14px;border:none;border-radius:var(--rad-s);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:opacity .15s}
-.hdr-btn:active{opacity:.7}
-.hdr-btn.acc{background:var(--acc);color:#fff}
-.hdr-btn.ghost{background:var(--acc-l);color:var(--acc-d)}
-
-/* ══ СКРОЛЛ ═══════════════════════════════════════════ */
-.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
-.scroll::-webkit-scrollbar{width:3px}
-.scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:2px}
-
-/* ══ СЕКЦИИ ═══════════════════════════════════════════ */
-.sec{background:var(--bg);border-radius:var(--rad);margin:8px 12px;overflow:hidden;box-shadow:var(--shadow)}
-.sec-hdr{padding:10px 14px 0;font-size:11px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:.06em}
-.sec-body{padding:8px 0}
-.row-item{display:flex;align-items:center;padding:9px 14px;gap:10px;border-bottom:0.5px solid var(--border)}
-.row-item:last-child{border-bottom:none}
-.ri-ico{font-size:18px;flex-shrink:0;width:26px;text-align:center}
-.ri-body{flex:1;min-width:0}
-.ri-label{font-size:14px;color:var(--text)}
-.ri-sub{font-size:12px;color:var(--hint);margin-top:2px}
-.ri-right{flex-shrink:0;font-size:14px;font-weight:600;color:var(--text)}
-.ri-right.acc{color:var(--acc-d)}
-.ri-right.hint{font-weight:400;color:var(--hint)}
-.ri-arr{color:var(--hint);font-size:14px;margin-left:4px}
-
-/* ══ КАРТОЧКА ЗАКАЗА (список) ════════════════════════ */
-.order-card{background:var(--bg);border-radius:var(--rad);margin:0 12px 8px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;transition:opacity .1s}
-.order-card:first-child{margin-top:12px}
-.order-card:active{opacity:.85}
-.oc-top{display:flex;align-items:center;padding:12px 14px 8px;gap:10px}
-.oc-status{flex-shrink:0}
-.oc-badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
-.oc-info{flex:1;min-width:0}
-.oc-client{font-size:15px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.oc-date{font-size:12px;color:var(--hint);margin-top:2px}
-.oc-sum{font-size:15px;font-weight:700;color:var(--acc-d);flex-shrink:0}
-.oc-bot{display:flex;align-items:center;padding:0 14px 10px;gap:8px;flex-wrap:wrap}
-.oc-tag{font-size:11px;color:var(--hint);background:var(--bg2);padding:3px 8px;border-radius:12px}
-.oc-arr{margin-left:auto;color:var(--hint);font-size:14px}
-
-/* ══ СТАТУС-БЕЙДЖ ════════════════════════════════════ */
-.st-new    {background:var(--s-new-l);color:var(--s-new)}
-.st-conf   {background:var(--s-conf-l);color:var(--s-conf)}
-.st-cook   {background:var(--s-cook-l);color:var(--s-cook)}
-.st-done   {background:var(--s-done-l);color:var(--s-done)}
-.st-canc   {background:var(--s-canc-l);color:var(--s-canc)}
-
-/* ══ КНОПКИ ДЕЙСТВИЙ ═════════════════════════════════ */
-.actions{display:grid;gap:8px;padding:12px}
-.actions.cols2{grid-template-columns:1fr 1fr}
-.actions.cols3{grid-template-columns:1fr 1fr 1fr}
-.act-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 8px;border:none;border-radius:var(--rad);font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;transition:opacity .15s;line-height:1.2}
-.act-btn:active{opacity:.75}
-.act-btn .act-ico{font-size:22px}
-.ab-acc{background:var(--acc);color:#fff}
-.ab-grn{background:var(--grn-l);color:var(--grn)}
-.ab-red{background:var(--red-l);color:var(--red)}
-.ab-blue{background:var(--blue-l);color:var(--blue)}
-.ab-ghost{background:var(--bg2);color:var(--text)}
-
-/* ══ СТАТУСЫ (выбор) ═════════════════════════════════ */
-.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px}
-.st-btn{padding:12px;border:none;border-radius:var(--rad-s);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;transition:opacity .15s;text-align:center}
-.st-btn:active{opacity:.75}
-.st-btn.on{box-shadow:0 0 0 2px var(--acc)}
-
-/* ══ ДЕТАЛИ ЗАКАЗА ═══════════════════════════════════ */
-.dish-row{display:flex;align-items:center;padding:9px 14px;border-bottom:0.5px solid var(--border);gap:10px}
-.dish-row:last-child{border-bottom:none}
-.dr-name{flex:1;font-size:14px;color:var(--text);line-height:1.3}
-.dr-qty{font-size:13px;color:var(--hint);flex-shrink:0;min-width:40px;text-align:right}
-.dr-price{font-size:13px;font-weight:600;color:var(--acc-d);flex-shrink:0;min-width:70px;text-align:right}
-
-.total-block{padding:12px 14px;border-top:0.5px solid var(--border);background:var(--bg2)}
-.total-line{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px;color:var(--hint)}
-.total-line.big{font-size:16px;font-weight:700;color:var(--text);padding-top:8px;margin-top:4px;border-top:0.5px solid var(--border)}
-.total-line.big .tv{color:var(--acc-d)}
-
-/* ══ ФОРМА ════════════════════════════════════════════ */
-.f-group{padding:8px 14px 10px}
-.f-label{font-size:11px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
-.f-input{width:100%;height:40px;border:1px solid var(--border);border-radius:var(--rad-s);padding:0 11px;font-size:14px;font-family:inherit;color:var(--text);background:var(--bg2);-webkit-appearance:none;appearance:none;outline:none;transition:border-color .15s}
-.f-input:focus{border-color:var(--acc);background:var(--bg)}
-textarea.f-input{height:auto;padding:9px 11px;resize:none}
-select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
-.f-row{display:flex;gap:8px}
-.f-row>.f-group{flex:1;padding-left:0;padding-right:0}
-.f-row>.f-group:first-child{padding-left:14px}
-.f-row>.f-group:last-child{padding-right:14px}
-.f-toggle{display:flex;border:1px solid var(--border);border-radius:var(--rad-s);overflow:hidden;height:40px}
-.f-tgl-btn{flex:1;border:none;background:var(--bg2);color:var(--hint);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;transition:all .15s}
-.f-tgl-btn:not(:last-child){border-right:0.5px solid var(--border)}
-.f-tgl-btn.on{background:var(--acc);color:#fff}
-
-/* ══ КЛИЕНТ AUTOCOMPLETE ═════════════════════════════ */
-.cw{position:relative}
-.cw .f-input{padding-right:36px}
-.c-clr{position:absolute;right:10px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--hint);font-size:18px;cursor:pointer;padding:0;line-height:1}
-.c-drop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg);border:1px solid var(--border);border-radius:var(--rad);z-index:200;max-height:220px;overflow-y:auto;display:none;box-shadow:0 4px 20px rgba(0,0,0,.12)}
-.c-drop.on{display:block}
-.c-opt{padding:10px 12px;cursor:pointer;border-bottom:0.5px solid var(--border)}
-.c-opt:last-child{border-bottom:none}
-.c-opt-n{font-size:14px;color:var(--text);font-weight:500}
-.c-opt-s{font-size:11px;color:var(--hint);margin-top:2px}
-.c-opt:active{background:var(--bg2)}
-
-/* ══ КАТАЛОГ ══════════════════════════════════════════ */
-.srch-wrap{padding:8px 12px;background:var(--bg);border-bottom:0.5px solid var(--border);flex-shrink:0}
-.srch-inp{width:100%;height:36px;border:1px solid var(--border);border-radius:20px;padding:0 14px;font-size:14px;font-family:inherit;color:var(--text);background:var(--bg2);outline:none}
-.srch-inp:focus{border-color:var(--acc)}
-.chips-wrap{padding:8px 12px;background:var(--bg);border-bottom:0.5px solid var(--border);display:flex;gap:6px;overflow-x:auto;flex-shrink:0}
-.chips-wrap::-webkit-scrollbar{display:none}
-.chip{white-space:nowrap;padding:5px 12px;border-radius:16px;border:0.5px solid var(--border);font-size:12px;font-weight:500;color:var(--hint);background:var(--bg2);cursor:pointer;flex-shrink:0;transition:all .15s}
-.chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
-
-/* ══ БЛЮДО В КАТАЛОГЕ ════════════════════════════════ */
-.d-row{display:flex;align-items:center;padding:10px 14px;border-bottom:0.5px solid var(--border);background:var(--bg);gap:10px}
-.d-info{flex:1;min-width:0}
-.d-name{font-size:14px;color:var(--text);line-height:1.3}
-.d-cat{font-size:11px;color:var(--hint);margin-top:2px}
-.d-price{font-size:14px;font-weight:600;color:var(--acc-d);flex-shrink:0;min-width:64px;text-align:right}
-.d-add{width:34px;height:34px;border-radius:50%;background:var(--acc);border:none;color:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .1s}
-.d-add:active{transform:scale(.88)}
-.qc{display:flex;align-items:center;flex-shrink:0}
-.qb{width:30px;height:30px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .1s}
-.qb:first-child{border-radius:var(--rad-s) 0 0 var(--rad-s);border-right:none}
-.qb:last-child{border-radius:0 var(--rad-s) var(--rad-s) 0;border-left:none}
-.qb:active{background:var(--acc-l)}
-.qv{width:30px;height:30px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--text);background:var(--bg)}
-
-/* ══ РУЧНОЕ ДОБАВЛЕНИЕ ════════════════════════════════ */
-.manual-add{padding:8px 14px 10px;background:var(--bg2);border-bottom:0.5px solid var(--border);flex-shrink:0}
-.ma-row{display:flex;gap:6px;align-items:center}
-.ma-row .ma-n{flex:2;min-width:0}
-.ma-row .ma-p{flex:1;min-width:50px}
-.ma-row .ma-q{width:48px;flex:none}
-.ma-btn{height:38px;padding:0 12px;background:var(--acc);color:#fff;border:none;border-radius:var(--rad-s);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:opacity .15s}
-.ma-btn:active{opacity:.8}
-.ma-inp{height:38px;border:1px solid var(--border);border-radius:var(--rad-s);padding:0 8px;font-size:13px;font-family:inherit;color:var(--text);background:var(--bg);outline:none}
-.ma-inp:focus{border-color:var(--acc)}
-
-/* ══ КОРЗИНА ══════════════════════════════════════════ */
-.cart-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--hint);padding:40px}
-.ci{padding:11px 14px;border-bottom:0.5px solid var(--border);background:var(--bg)}
-.ci-top{display:flex;align-items:start;gap:8px}
-.ci-name{flex:1;font-size:14px;color:var(--text);line-height:1.3}
-.ci-del{border:none;background:transparent;color:var(--hint);font-size:18px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;padding-top:1px}
-.ci-bot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;flex-wrap:wrap;gap:8px}
-.ci-pe{display:flex;align-items:center;gap:6px}
-.ci-pi{width:68px;height:30px;text-align:center;font-size:13px;border-radius:var(--rad-s);border:1px solid var(--border);background:var(--bg2);color:var(--text);padding:0 4px;font-family:inherit}
-.ci-pi:focus{border-color:var(--acc);outline:none}
-.ci-unit{font-size:12px;color:var(--hint)}
-.ci-total{font-size:14px;font-weight:600;color:var(--acc-d)}
-
-/* ══ ФУТЕР КОРЗИНЫ ════════════════════════════════════ */
-.cart-footer{flex-shrink:0;background:var(--bg);border-top:0.5px solid var(--border);padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
-.cf-lines{margin-bottom:10px}
-.cf-line{display:flex;justify-content:space-between;font-size:13px;color:var(--hint);margin-bottom:4px}
-.cf-total{display:flex;justify-content:space-between;align-items:baseline;padding-top:8px;border-top:0.5px solid var(--border);margin-top:4px}
-.cf-t-l{font-size:14px;color:var(--hint)}
-.cf-t-v{font-size:22px;font-weight:700;color:var(--text)}
-.sv-btn{width:100%;height:46px;background:var(--btn,var(--acc));color:var(--btn-t,#fff);border:none;border-radius:var(--rad);font-size:16px;font-weight:600;font-family:inherit;cursor:pointer;margin-top:10px;transition:opacity .15s}
-.sv-btn:disabled{opacity:.4;cursor:default}
-.sv-btn:active:not(:disabled){opacity:.85}
-
-/* ══ СКИДКА ПОЛЕ ══════════════════════════════════════ */
-.discount-wrap{display:flex;gap:8px;align-items:center;padding:8px 14px;border-top:0.5px solid var(--border)}
-.dw-l{font-size:13px;color:var(--hint);flex:1}
-.dw-inp{width:70px;height:34px;text-align:center;font-size:14px;font-weight:600;border-radius:var(--rad-s);border:1px solid var(--border);background:var(--bg2);color:var(--text);font-family:inherit;outline:none}
-.dw-inp:focus{border-color:var(--acc)}
-.dw-pct{font-size:13px;color:var(--hint)}
-
-/* ══ AI БЛОК ══════════════════════════════════════════ */
-.ai-wrap{padding:0 14px 12px}
-.ai-ta{width:100%;border:1px solid var(--border);border-radius:var(--rad-s);padding:9px 11px;font-size:13px;font-family:inherit;color:var(--text);background:var(--bg2);resize:none;outline:none}
-.ai-ta:focus{border-color:var(--acc)}
-.ai-go{width:100%;height:38px;background:var(--acc-l);border:none;border-radius:var(--rad-s);font-size:13px;font-weight:600;color:var(--acc-d);cursor:pointer;font-family:inherit;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px;transition:opacity .15s}
-.ai-go:disabled{opacity:.5;cursor:default}
-.ai-results{margin-top:10px;background:var(--bg2);border-radius:var(--rad-s);overflow:hidden;border:0.5px solid var(--border)}
-.ai-hint{font-size:11px;font-weight:700;color:var(--hint);padding:8px 12px 4px;text-transform:uppercase;letter-spacing:.04em}
-.ai-row{display:flex;align-items:center;padding:8px 12px;border-top:0.5px solid var(--border);gap:8px}
-.ai-rn{flex:1;font-size:13px;color:var(--text)}
-.ai-add-btn{background:var(--acc);color:#fff;border:none;border-radius:var(--rad-s);padding:5px 10px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;flex-shrink:0;transition:background .15s}
-.ai-add-btn.done{background:var(--grn)}
-
-/* ══ ЗАКУПКИ ══════════════════════════════════════════ */
-.sh-item{display:flex;align-items:center;padding:10px 14px;border-bottom:0.5px solid var(--border);background:var(--bg);gap:10px;cursor:pointer;transition:opacity .1s}
-.sh-item:last-child{border-bottom:none}
-.sh-item:active{opacity:.8}
-.sh-chk{width:22px;height:22px;border:2px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;background:var(--bg)}
-.sh-chk.on{background:var(--grn);border-color:var(--grn)}
-.sh-chk.on::after{content:"✓";color:#fff;font-size:13px;font-weight:700}
-.sh-body{flex:1;min-width:0}
-.sh-name{font-size:14px;color:var(--text)}
-.sh-name.done{text-decoration:line-through;color:var(--hint)}
-.sh-qty{font-size:12px;color:var(--hint);margin-top:2px}
-.sh-price{font-size:13px;font-weight:600;color:var(--acc-d);flex-shrink:0}
-
-/* ══ МЕНЮ-РЕДАКТОР ════════════════════════════════════ */
-.menu-edit-row{display:flex;align-items:center;padding:10px 14px;border-bottom:0.5px solid var(--border);background:var(--bg);gap:10px;cursor:pointer}
-.me-info{flex:1;min-width:0}
-.me-name{font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.me-cat{font-size:11px;color:var(--hint);margin-top:2px}
-.me-price{font-size:14px;font-weight:600;color:var(--acc-d);flex-shrink:0;min-width:60px;text-align:right}
-.me-arr{color:var(--hint);font-size:14px;margin-left:4px}
-
-/* ══ НАПОМИНАНИЯ ══════════════════════════════════════ */
-.reminder-card{background:var(--bg);border-radius:var(--rad);margin:0 12px 8px;padding:14px;box-shadow:var(--shadow)}
-.rc-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.rc-ico{font-size:24px}
-.rc-title{font-size:15px;font-weight:600;color:var(--text)}
-.rc-sub{font-size:12px;color:var(--hint);margin-top:2px}
-.rc-actions{display:flex;gap:8px}
-.rc-btn{flex:1;height:36px;border:none;border-radius:var(--rad-s);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:opacity .15s}
-.rc-btn:active{opacity:.75}
-
-/* ══ ЛОАДЕР ═══════════════════════════════════════════ */
-#loader{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:999}
-.spin{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:spin .7s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.load-text{font-size:14px;color:var(--hint)}
-
-/* ══ TOAST ════════════════════════════════════════════ */
-#toast{position:fixed;bottom:74px;left:50%;transform:translateX(-50%) translateY(10px);background:rgba(20,20,20,.88);color:#fff;font-size:13px;padding:8px 18px;border-radius:20px;opacity:0;transition:all .2s;pointer-events:none;white-space:nowrap;z-index:1000;backdrop-filter:blur(8px)}
-#toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
-
-/* ══ ПУСТОЙ СТЕЙТ ═════════════════════════════════════ */
-.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px;text-align:center}
-.empty-ico{font-size:44px;margin-bottom:4px}
-.empty-title{font-size:16px;font-weight:600;color:var(--text)}
-.empty-sub{font-size:13px;color:var(--hint);line-height:1.5}
-
-/* ══ КНОПКА "ОБНОВИТЬ" ════════════════════════════════ */
-.refresh-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;background:var(--bg);border-radius:var(--rad-s);border:1px solid var(--border);font-size:12px;color:var(--hint);cursor:pointer;font-family:inherit;transition:opacity .15s}
-.refresh-btn:active{opacity:.7}
-.cache-bar{padding:6px 12px;background:var(--bg);border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.cache-time{font-size:11px;color:var(--hint)}
-
-/* ══ МОДАЛЬНЫЙ СТАТУС ═════════════════════════════════ */
-#modal{position:fixed;inset:0;z-index:300;display:none;align-items:flex-end}
-#modal.on{display:flex}
-.modal-bg{position:absolute;inset:0;background:rgba(0,0,0,.4)}
-.modal-sheet{position:relative;width:100%;background:var(--bg);border-radius:var(--rad) var(--rad) 0 0;padding-bottom:env(safe-area-inset-bottom);z-index:1;animation:slideUp .2s ease}
-@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-.ms-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px}
-.ms-title{font-size:16px;font-weight:600;color:var(--text)}
-.ms-close{border:none;background:transparent;color:var(--hint);font-size:22px;cursor:pointer;padding:0;line-height:1}
-.ms-body{padding:0 12px 16px}
-</style>
+<link rel="stylesheet" href="css/style.css"/>
 </head>
 <body>
 
@@ -326,12 +15,25 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 </div>
 <div id="toast"></div>
 
-<!-- ══ МОДАЛЬНЫЙ ВЫБОР СТАТУСА ════════════════════════════ -->
+<!-- ══ CONFIRM DIALOG ══════════════════════════════════════ -->
+<div id="confirm-dialog">
+  <div class="cd-bg" onclick="confirmCancel()"></div>
+  <div class="cd-box">
+    <div class="cd-title" id="cd-title">Подтвердите действие</div>
+    <div class="cd-text"  id="cd-text"></div>
+    <div class="cd-btns">
+      <button class="cd-btn cd-cancel" onclick="confirmCancel()">Отмена</button>
+      <button class="cd-btn cd-ok"     id="cd-ok" onclick="confirmOk()">Да</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ МОДАЛЬНЫЙ СТАТУС / КАРТЫ ════════════════════════════ -->
 <div id="modal">
   <div class="modal-bg" onclick="closeModal()"></div>
   <div class="modal-sheet">
     <div class="ms-hdr">
-      <div class="ms-title">Изменить статус</div>
+      <div class="ms-title" id="modal-title">Действие</div>
       <button class="ms-close" onclick="closeModal()">✕</button>
     </div>
     <div class="ms-body" id="modal-body"></div>
@@ -340,32 +42,33 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 
 <div id="app" style="display:none">
 
-  <!-- ════════════════════════════════════════════════════
-       ЭКРАНЫ (стек навигации)
-  ═══════════════════════════════════════════════════════ -->
   <div class="screens" id="screens">
 
-    <!-- ══ ВКЛАДКА 1: ЗАКАЗЫ ════════════════════════════ -->
+    <!-- ══ ВКЛАДКА 1: ЗАКАЗЫ ═══════════════════════════════ -->
     <div class="scr on" id="s-orders">
       <div class="cache-bar">
         <span class="cache-time" id="cache-time">—</span>
         <button class="refresh-btn" onclick="forceReload()">↻ Обновить</button>
       </div>
-      <!-- Табы активные/архив -->
       <div style="display:flex;background:var(--bg);border-bottom:0.5px solid var(--border);flex-shrink:0">
-        <button class="f-tgl-btn on" id="tab-active" onclick="setOrderTab('active',this)" style="height:38px;font-size:13px;border-radius:0">Активные</button>
-        <button class="f-tgl-btn" id="tab-archive" onclick="setOrderTab('archive',this)" style="height:38px;font-size:13px;border-radius:0">Архив</button>
+        <button class="f-tgl-btn on" id="tab-active"  onclick="setOrderTab('active',this)"  style="height:38px;font-size:13px;border-radius:0">Активные</button>
+        <button class="f-tgl-btn"    id="tab-archive" onclick="setOrderTab('archive',this)" style="height:38px;font-size:13px;border-radius:0">Архив</button>
+      </div>
+      <div class="orders-search-wrap">
+        <input class="orders-srch" id="order-srch" type="text"
+               placeholder="Поиск по клиенту, блюду, адресу…"
+               oninput="onOrderSearch()"/>
       </div>
       <div class="scroll" id="orders-list"></div>
     </div>
 
-    <!-- ══ ДЕТАЛИ ЗАКАЗА ════════════════════════════════ -->
+    <!-- ══ ДЕТАЛИ ЗАКАЗА ════════════════════════════════════ -->
     <div class="scr" id="s-order-detail">
       <div class="hdr">
         <button class="hdr-back" onclick="goBack()">‹</button>
         <div class="hdr-body">
           <div class="hdr-title" id="od-title">Заказ</div>
-          <div class="hdr-sub" id="od-sub"></div>
+          <div class="hdr-sub"   id="od-sub"></div>
         </div>
         <div class="hdr-action">
           <button class="hdr-btn ghost" onclick="openEditOrder()">Редакт.</button>
@@ -374,7 +77,7 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
       <div class="scroll" id="order-detail-body"></div>
     </div>
 
-    <!-- ══ ВКЛАДКА 2: НОВЫЙ ЗАКАЗ — ШАГ 1 (ДЕТАЛИ) ════ -->
+    <!-- ══ ВКЛАДКА 2: НОВЫЙ ЗАКАЗ — ШАГ 1 ══════════════════ -->
     <div class="scr" id="s-new-details">
       <div class="hdr">
         <button class="hdr-back" onclick="goBack()">‹</button>
@@ -387,21 +90,22 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
         </div>
       </div>
       <div class="scroll">
-        <!-- Клиент -->
         <div class="sec">
           <div class="sec-hdr">Клиент</div>
           <div class="sec-body">
             <div class="f-group" style="padding-top:4px">
               <div class="cw">
-                <input class="f-input" type="text" id="o-client" placeholder="Имя клиента" oninput="onClientInput()" autocomplete="off"/>
+                <input class="f-input" type="text" id="o-client"
+                       placeholder="Имя клиента"
+                       oninput="onClientInput()" autocomplete="off"/>
                 <button class="c-clr" onclick="clearClient()">✕</button>
                 <div class="c-drop" id="c-drop"></div>
               </div>
             </div>
             <div class="f-row">
               <div class="f-group">
-                <div class="f-label">Связь</div>
-                <select class="f-input" id="o-contact">
+                <div class="f-label">Способ связи</div>
+                <select class="f-input" id="o-contact" onchange="saveDraft()">
                   <option value="">Не указан</option>
                   <option>Телеграм</option>
                   <option>Вайбер</option>
@@ -413,64 +117,63 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
             </div>
           </div>
         </div>
-        <!-- Дата и время -->
         <div class="sec">
           <div class="sec-hdr">Дата и время</div>
           <div class="sec-body">
             <div class="f-row">
               <div class="f-group">
                 <div class="f-label">Дата мероприятия</div>
-                <input class="f-input" type="date" id="o-date"/>
+                <input class="f-input" type="date" id="o-date" onchange="saveDraft()"/>
               </div>
               <div class="f-group">
                 <div class="f-label">Время</div>
-                <input class="f-input" type="text" id="o-time" placeholder="14:00"/>
+                <input class="f-input" type="text" id="o-time" placeholder="14:00" oninput="saveDraft()"/>
               </div>
             </div>
           </div>
         </div>
-        <!-- Доставка -->
         <div class="sec">
           <div class="sec-hdr">Способ получения</div>
           <div class="sec-body">
             <div class="f-group" style="padding-top:4px">
               <div class="f-toggle" id="tg-deliv">
                 <button class="f-tgl-btn on" onclick="setDeliv('Самовывоз',this)">Самовывоз</button>
-                <button class="f-tgl-btn" onclick="setDeliv('Доставка',this)">Доставка</button>
+                <button class="f-tgl-btn"    onclick="setDeliv('Доставка',this)">Доставка</button>
               </div>
             </div>
             <div id="deliv-extra" style="display:none">
               <div class="f-group">
                 <div class="f-label">Адрес доставки</div>
-                <input class="f-input" type="text" id="o-addr" placeholder="Улица, дом, квартира"/>
+                <input class="f-input" type="text" id="o-addr"
+                       placeholder="Улица, дом, квартира" oninput="saveDraft()"/>
               </div>
               <div class="f-group">
                 <div class="f-label">Стоимость доставки (BYN)</div>
-                <input class="f-input" type="number" id="o-dcost" placeholder="0.00" min="0" step="0.5" oninput="updCart()"/>
+                <input class="f-input" type="number" id="o-dcost"
+                       placeholder="0.00" min="0" step="0.5"
+                       oninput="updCart();saveDraft()"/>
               </div>
             </div>
           </div>
         </div>
-        <!-- Оплата -->
         <div class="sec">
           <div class="sec-hdr">Оплата</div>
           <div class="sec-body">
             <div class="f-group" style="padding-top:4px">
               <div class="f-toggle" id="tg-pay">
                 <button class="f-tgl-btn on" onclick="setPay(true,this)">Предоплата 50%</button>
-                <button class="f-tgl-btn" onclick="setPay(false,this)">По факту</button>
+                <button class="f-tgl-btn"    onclick="setPay(false,this)">По факту</button>
               </div>
             </div>
           </div>
         </div>
-        <!-- AI импорт -->
         <div class="sec">
           <div class="sec-hdr">AI-импорт из сообщения</div>
           <div class="sec-body">
             <div class="ai-wrap">
-              <textarea class="ai-ta" id="ai-txt" rows="3" placeholder="Вставьте сообщение клиента…"></textarea>
-              <button class="ai-go" id="ai-go-btn" onclick="runAI()">✦ Разобрать через AI</button>
-              <div id="ai-res" style="display:none" class="ai-results"></div>
+              <textarea class="ai-ta" id="ai-txt" rows="3"
+                        placeholder="Вставьте сообщение клиента…"></textarea>
+              <button class="ai-go" onclick="runAI()">✦ Разобрать через AI</button>
             </div>
           </div>
         </div>
@@ -478,35 +181,36 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
       </div>
     </div>
 
-    <!-- ══ ВКЛАДКА 2: ШАГ 2 (КАТАЛОГ) ═════════════════ -->
+    <!-- ══ ШАГ 2: КАТАЛОГ ═══════════════════════════════════ -->
     <div class="scr" id="s-catalog">
       <div class="hdr">
         <button class="hdr-back" onclick="goBack()">‹</button>
         <div class="hdr-body">
           <div class="hdr-title">Меню</div>
-          <div class="hdr-sub" id="cat-sub">0 позиций</div>
+          <div class="hdr-sub" id="cat-sub">0 в корзине</div>
         </div>
         <div class="hdr-action">
           <button class="hdr-btn acc" onclick="goToCart()">Корзина →</button>
         </div>
       </div>
       <div class="srch-wrap">
-        <input class="srch-inp" type="text" id="srch" placeholder="Поиск блюда…" oninput="filterMenu()"/>
+        <input class="srch-inp" type="text" id="srch"
+               placeholder="Поиск блюда…" oninput="filterMenu()"/>
       </div>
       <div class="chips-wrap" id="chips"></div>
       <div class="manual-add">
         <div class="f-label" style="margin-bottom:6px">Добавить вручную</div>
         <div class="ma-row">
-          <input class="ma-inp ma-n" type="text" id="m-name" placeholder="Название"/>
+          <input class="ma-inp ma-n" type="text"   id="m-name"  placeholder="Название"/>
           <input class="ma-inp ma-p" type="number" id="m-price" placeholder="Цена" min="0" step="0.5"/>
-          <input class="ma-inp ma-q" type="number" id="m-qty" placeholder="×" min="1" step="1"/>
+          <input class="ma-inp ma-q" type="number" id="m-qty"   placeholder="×"    min="1" step="1"/>
           <button class="ma-btn" onclick="addManual()">+</button>
         </div>
       </div>
       <div class="scroll"><div id="menu-list"></div></div>
     </div>
 
-    <!-- ══ ШАГ 3: КОРЗИНА ══════════════════════════════ -->
+    <!-- ══ ШАГ 3: КОРЗИНА ══════════════════════════════════ -->
     <div class="scr" id="s-cart">
       <div class="hdr">
         <button class="hdr-back" onclick="goBack()">‹</button>
@@ -517,9 +221,9 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
       </div>
       <div class="scroll" id="cart-body">
         <div class="cart-empty" id="cart-empty">
-          <div class="empty-ico">🛒</div>
-          <div class="empty-title">Корзина пуста</div>
-          <div class="empty-sub">Добавьте блюда из каталога</div>
+          <div style="font-size:44px">🛒</div>
+          <div style="font-size:16px;font-weight:600;color:var(--text)">Корзина пуста</div>
+          <div style="font-size:13px;color:var(--hint)">Добавьте блюда из каталога</div>
         </div>
         <div id="cart-items"></div>
         <div id="cart-note-wrap" style="display:none">
@@ -527,7 +231,9 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
             <div class="sec-hdr">Примечание</div>
             <div class="sec-body">
               <div class="f-group" style="padding-top:4px">
-                <textarea class="f-input" id="c-note" rows="3" placeholder="Пожелания, аллергии…"></textarea>
+                <textarea class="f-input" id="c-note" rows="3"
+                          placeholder="Пожелания, аллергии…"
+                          oninput="saveDraft()"></textarea>
               </div>
             </div>
           </div>
@@ -537,13 +243,16 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
         <div id="cart-footer-lines" class="cf-lines"></div>
         <div class="cf-total">
           <span class="cf-t-l">Итого</span>
-          <span class="cf-t-v"><span id="c-total">0,00</span> <span style="font-size:14px;font-weight:400;color:var(--hint)">BYN</span></span>
+          <span class="cf-t-v">
+            <span id="c-total">0,00</span>
+            <span style="font-size:14px;font-weight:400;color:var(--hint)"> BYN</span>
+          </span>
         </div>
         <button class="sv-btn" id="sv-btn" onclick="saveOrder()" disabled>Сохранить заказ</button>
       </div>
     </div>
 
-    <!-- ══ ВКЛАДКА 3: ЗАКУПКИ ═══════════════════════════ -->
+    <!-- ══ ВКЛАДКА 3: ЗАКУПКИ ═══════════════════════════════ -->
     <div class="scr" id="s-shopping">
       <div class="cache-bar">
         <span class="cache-time" id="cache-time2">—</span>
@@ -552,7 +261,7 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
       <div class="scroll" id="shopping-list"></div>
     </div>
 
-    <!-- ══ ВКЛАДКА 4: МЕНЮ-РЕДАКТОР ════════════════════ -->
+    <!-- ══ ВКЛАДКА 4: МЕНЮ-РЕДАКТОР ════════════════════════ -->
     <div class="scr" id="s-menu">
       <div class="hdr" style="padding-right:12px">
         <div class="hdr-body" style="padding-left:14px">
@@ -562,13 +271,14 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
         <button class="hdr-btn acc" onclick="openNewDishForm()" style="flex-shrink:0">+ Добавить</button>
       </div>
       <div class="srch-wrap">
-        <input class="srch-inp" type="text" id="menu-srch" placeholder="Поиск по меню…" oninput="filterMenuEdit()"/>
+        <input class="srch-inp" type="text" id="menu-srch"
+               placeholder="Поиск по меню…" oninput="filterMenuEdit()"/>
       </div>
       <div class="chips-wrap" id="menu-chips"></div>
       <div class="scroll"><div id="menu-edit-list"></div></div>
     </div>
 
-    <!-- ══ РЕДАКТИРОВАНИЕ БЛЮДА ══════════════════════════ -->
+    <!-- ══ РЕДАКТИРОВАНИЕ БЛЮДА ════════════════════════════ -->
     <div class="scr" id="s-dish-edit">
       <div class="hdr">
         <button class="hdr-back" onclick="goBack()">‹</button>
@@ -589,7 +299,8 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
             </div>
             <div class="f-group">
               <div class="f-label">Категория</div>
-              <input class="f-input" type="text" id="de-cat" placeholder="Например: Супы — Горячие" list="cat-list"/>
+              <input class="f-input" type="text" id="de-cat"
+                     placeholder="Например: Супы — Горячие" list="cat-list"/>
               <datalist id="cat-list"></datalist>
             </div>
           </div>
@@ -604,7 +315,7 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
               </div>
               <div class="f-group">
                 <div class="f-label">Себестоимость (BYN)</div>
-                <input class="f-input" type="number" id="de-cost" placeholder="0.00" min="0" step="0.5"/>
+                <input class="f-input" type="number" id="de-cost"  placeholder="0.00" min="0" step="0.5"/>
               </div>
             </div>
           </div>
@@ -612,18 +323,16 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
         <div class="sec">
           <div class="sec-hdr">Параметры</div>
           <div class="sec-body">
-            <div class="f-row">
-              <div class="f-group">
-                <div class="f-label">Единица измерения</div>
-                <select class="f-input" id="de-unit">
-                  <option value="порц.">порц.</option>
-                  <option value="шт">шт</option>
-                  <option value="кг">кг</option>
-                  <option value="г">г</option>
-                  <option value="л">л</option>
-                  <option value="мл">мл</option>
-                </select>
-              </div>
+            <div class="f-group" style="padding-top:4px">
+              <div class="f-label">Единица измерения</div>
+              <select class="f-input" id="de-unit">
+                <option value="порц.">порц.</option>
+                <option value="шт">шт</option>
+                <option value="кг">кг</option>
+                <option value="г">г</option>
+                <option value="л">л</option>
+                <option value="мл">мл</option>
+              </select>
             </div>
           </div>
         </div>
@@ -633,7 +342,7 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 
   </div><!-- /screens -->
 
-  <!-- ══ TAB BAR ═══════════════════════════════════════ -->
+  <!-- ══ TAB BAR ══════════════════════════════════════════ -->
   <div class="tab-bar">
     <button class="tb on" onclick="switchTab('orders',this)">
       <span class="tb-ico">📋</span><span>Заказы</span>
@@ -653,1072 +362,8 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 
 </div><!-- /app -->
 
-<script>
-'use strict';
-
-// ══════════════════════════════════════════════════════════
-// КОНФИГ
-// ══════════════════════════════════════════════════════════
-// GAS_URL — вставить после деплоя Google Apps Script.
-// Если пустой — используется GitHub-кеш как fallback.
-const GAS_URL    = "https://script.google.com/macros/s/AKfycbz3sodPD-Wj-6jyhqHon2vLx403H1ZDca3PrLRl1VokqezcChVHb1V_rj6yZqyAgk66/exec";
-const CACHE_URL  = "https://vearjkeee.github.io/Slaunaya_eza/menu_cache.json";
-const WEBAPP_URL = "https://vearjkeee.github.io/Slaunaya_eza/index.html";
-
-const ST = {
-  NEW:  "🆕 Новый",
-  CONF: "✅ Подтверждён",
-  COOK: "🍳 Готовится",
-  DONE: "✔️ Выполнен",
-  CANC: "❌ Отменён",
-};
-
-const ST_CLASSES = {
-  [ST.NEW]:  "st-new",
-  [ST.CONF]: "st-conf",
-  [ST.COOK]: "st-cook",
-  [ST.DONE]: "st-done",
-  [ST.CANC]: "st-canc",
-};
-
-// ══════════════════════════════════════════════════════════
-// TELEGRAM WEB APP
-// ══════════════════════════════════════════════════════════
-const twa = window.Telegram?.WebApp;
-if (twa) { twa.ready(); twa.expand(); }
-
-function sendToBot(data) {
-  if (twa) { twa.sendData(JSON.stringify(data)); }
-  else      { console.log("sendData:", data); }
-}
-
-// ══════════════════════════════════════════════════════════
-// СОСТОЯНИЕ
-// ══════════════════════════════════════════════════════════
-let MENU    = [];
-let CLIENTS = [];
-let ACTIVE_ORDERS  = [];
-let ARCHIVE_ORDERS = [];
-let SHOPPING  = [];
-
-let cart = {};          // { id: {d, q, p, manual} }
-let delivType  = 'Самовывоз';
-let prepay     = true;
-let manualId   = 1000;
-let editingRow = null;  // null = новый заказ, number = редактирование
-
-// навигация
-let screenStack = [];   // стек экранов для goBack()
-let currentTab  = 'orders';
-let orderTab    = 'active'; // 'active' | 'archive'
-let currentOrderRow = null;
-let editingDishId   = null; // null = новое блюдо
-
-// ══════════════════════════════════════════════════════════
-// ЗАГРУЗКА КЭША
-// ══════════════════════════════════════════════════════════
-// ── Источник данных: GAS (приоритет) или GitHub-кеш (fallback) ──
-async function fetchData(force = false) {
-  // 1. Пробуем GAS — данные почти в реальном времени
-  if (GAS_URL) {
-    try {
-      const url = GAS_URL + "?action=getData" + (force ? "&t=" + Date.now() : "");
-      const r   = await fetch(url, { redirect: "follow" });
-      if (r.ok) {
-        const data = await r.json();
-        if (!data.error) return { data, source: data._cached ? "gas-cache" : "gas-live" };
-      }
-    } catch(e) {
-      console.warn("GAS fetch error:", e);
-    }
-  }
-
-  // 2. Fallback — GitHub Pages кеш (обновляется каждые 5 мин ботом)
-  try {
-    const url = CACHE_URL + "?t=" + (force ? Date.now() : Math.floor(Date.now() / 60000));
-    const r   = await fetch(url);
-    if (r.ok) {
-      const data = await r.json();
-      return { data, source: "github" };
-    }
-  } catch(e) {
-    console.warn("GitHub cache error:", e);
-  }
-
-  return null;
-}
-
-function applyData(data) {
-  MENU           = data.menu           || [];
-  CLIENTS        = data.clients        || [];
-  ACTIVE_ORDERS  = data.active_orders  || [];
-  ARCHIVE_ORDERS = data.archive_orders || [];
-  SHOPPING       = data.shopping_list  || [];
-}
-
-async function loadCache(force = false) {
-  const result = await fetchData(force);
-  if (!result) {
-    showToast("⚠️ Нет соединения — данные могут быть устаревшими");
-    return;
-  }
-  applyData(result.data);
-
-  const upd    = result.data.updated || "";
-  const srcLbl = result.source === "gas-live"   ? " · 🟢 онлайн"
-               : result.source === "gas-cache"  ? " · 🟡 кеш GAS"
-               : " · ⚪ кеш GitHub";
-  const label  = upd ? "Обновлено: " + upd + srcLbl : srcLbl;
-
-  document.getElementById("cache-time").textContent  = label;
-  document.getElementById("cache-time2").textContent = label;
-}
-
-async function forceReload() {
-  showToast("⟳ Обновляю…");
-  await loadCache(true);
-  renderCurrentTab();
-  showToast("✓ Данные обновлены");
-}
-
-// ══════════════════════════════════════════════════════════
-// TOAST
-// ══════════════════════════════════════════════════════════
-let toastT;
-function showToast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('on');
-  clearTimeout(toastT);
-  toastT = setTimeout(() => el.classList.remove('on'), 2200);
-}
-
-// ══════════════════════════════════════════════════════════
-// НАВИГАЦИЯ
-// ══════════════════════════════════════════════════════════
-function getTabRoot(tab) {
-  return { orders:'s-orders', new:'s-new-details', shopping:'s-shopping', menu:'s-menu' }[tab];
-}
-
-function switchTab(tab, btn) {
-  // Сбрасываем стек
-  screenStack = [];
-  currentTab = tab;
-
-  // Tab bar
-  document.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
-  btn.classList.add('on');
-
-  // Показываем нужный корневой экран
-  document.querySelectorAll('.scr').forEach(s => {
-    s.classList.remove('on','back');
-    s.style.transform = 'translateX(100%)';
-  });
-  const root = getTabRoot(tab);
-  const el = document.getElementById(root);
-  el.style.transform = '';
-  el.classList.add('on');
-
-  renderCurrentTab();
-}
-
-function pushScreen(id) {
-  // Текущий "on" уходит влево
-  const cur = document.querySelector('.scr.on');
-  if (cur) {
-    cur.classList.remove('on');
-    cur.classList.add('back');
-  }
-  screenStack.push(cur ? cur.id : getTabRoot(currentTab));
-  const next = document.getElementById(id);
-  next.style.transform = 'translateX(100%)';
-  next.classList.remove('back');
-  // reflow
-  next.getBoundingClientRect();
-  next.style.transform = '';
-  next.classList.add('on');
-}
-
-function goBack() {
-  if (!screenStack.length) return;
-  const prev = screenStack.pop();
-  const cur = document.querySelector('.scr.on');
-  if (cur) { cur.classList.remove('on'); cur.style.transform = 'translateX(100%)'; }
-  const prevEl = document.getElementById(prev);
-  prevEl.classList.remove('back');
-  prevEl.classList.add('on');
-}
-
-function renderCurrentTab() {
-  if (currentTab === 'orders')   renderOrders();
-  if (currentTab === 'shopping') renderShopping();
-  if (currentTab === 'menu')     renderMenuEdit();
-}
-
-// ══════════════════════════════════════════════════════════
-// ЗАКАЗЫ — СПИСОК
-// ══════════════════════════════════════════════════════════
-function setOrderTab(tab, btn) {
-  orderTab = tab;
-  document.querySelectorAll('#s-orders .f-tgl-btn').forEach(b => b.classList.remove('on'));
-  btn.classList.add('on');
-  renderOrders();
-}
-
-function statusClass(st) { return ST_CLASSES[st] || 'st-new'; }
-
-function renderOrders() {
-  const list = orderTab === 'active' ? ACTIVE_ORDERS : ARCHIVE_ORDERS;
-  const el = document.getElementById('orders-list');
-
-  // Badge
-  const actBdg = document.getElementById('bdg-orders');
-  actBdg.textContent = ACTIVE_ORDERS.length;
-  actBdg.classList.toggle('on', ACTIVE_ORDERS.length > 0);
-
-  if (!list.length) {
-    el.innerHTML = `<div class="empty-state">
-      <div class="empty-ico">${orderTab==='active'?'📭':'📦'}</div>
-      <div class="empty-title">${orderTab==='active'?'Активных заказов нет':'Архив пуст'}</div>
-      <div class="empty-sub">Создайте новый заказ через вкладку ➕</div>
-    </div>`;
-    return;
-  }
-
-  el.innerHTML = list.map(o => {
-    const sc = statusClass(o.status);
-    const tags = [o.delivery_type || '', o.dishes_count ? o.dishes_count+' позиций' : ''].filter(Boolean);
-    return `<div class="order-card" onclick="openOrderDetail(${o.row})">
-      <div class="oc-top">
-        <div class="oc-info">
-          <div class="oc-client">${esc(o.client)}</div>
-          <div class="oc-date">📅 ${esc(o.event_date)}${o.event_time?' в '+esc(o.event_time):''}</div>
-        </div>
-        <div class="oc-sum">${(+o.total||0).toFixed(2)} BYN</div>
-      </div>
-      <div class="oc-bot">
-        <span class="oc-badge ${sc}">${esc(o.status)}</span>
-        ${tags.map(t=>`<span class="oc-tag">${esc(t)}</span>`).join('')}
-        <span class="oc-arr">›</span>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ══════════════════════════════════════════════════════════
-// ДЕТАЛЬНЫЙ ВИД ЗАКАЗА
-// ══════════════════════════════════════════════════════════
-function openOrderDetail(row) {
-  currentOrderRow = row;
-  const order = findOrder(row);
-  if (!order) { showToast('Заказ не найден'); return; }
-
-  document.getElementById('od-title').textContent = order.client || 'Заказ';
-  document.getElementById('od-sub').textContent =
-    (order.event_date || '') + (order.event_time ? ' в '+order.event_time : '');
-
-  renderOrderDetail(order);
-  pushScreen('s-order-detail');
-}
-
-function findOrder(row) {
-  return ACTIVE_ORDERS.find(o => o.row == row) || ARCHIVE_ORDERS.find(o => o.row == row);
-}
-
-function fmtQty(q) {
-  q = parseFloat(q);
-  return (q === Math.floor(q)) ? String(Math.floor(q)) : String(q);
-}
-
-function renderOrderDetail(order) {
-  const isActive = ACTIVE_ORDERS.some(o => o.row == order.row);
-  const dishes   = order.dishes || [];
-  const sc       = statusClass(order.status);
-
-  const sub      = dishes.reduce((s,d) => s + (+d.price||0)*(+d.qty||0), 0);
-  const delivery = +order.delivery || 0;
-  const discP    = +order.discount_percent || 0;
-  const discA    = discP > 0 ? +(order.discount_amount || (sub*discP/100).toFixed(2)) : 0;
-  const total    = +order.total || (sub - discA + delivery);
-  const prepayAmt = (total/2).toFixed(2);
-  let html = '';
-
-  // ── Статус ──────────────────────────────────────────
-  html += `<div class="sec" style="margin-top:12px">
-    <div class="sec-hdr">Статус</div>
-    <div class="sec-body">
-      <div class="row-item">
-        <div class="ri-ico">📌</div>
-        <div class="ri-body"><div class="ri-label"><span class="oc-badge ${sc}">${esc(order.status)}</span></div></div>
-        ${isActive ? `<button class="hdr-btn ghost" onclick="openStatusModal(${order.row})">Изменить</button>` : ''}
-      </div>
-    </div>
-  </div>`;
-
-  // ── Кнопки действий ─────────────────────────────────
-  if (isActive) {
-    const addr = encodeURIComponent(order.address || '');
-    html += `<div class="actions cols2">
-      <button class="act-btn ab-blue" onclick="genReceipt(${order.row})">
-        <span class="act-ico">📄</span>Предчек
-      </button>
-      <button class="act-btn ab-grn" onclick="openMapChoice('${addr}')">
-        <span class="act-ico">🗺</span>Маршрут
-      </button>
-      <button class="act-btn ab-ghost" onclick="contactClient('${esc(order.contact||'')}')">
-        <span class="act-ico">💬</span>Связаться
-      </button>
-      <button class="act-btn ab-red" onclick="openStatusModal(${order.row})">
-        <span class="act-ico">⚡</span>Статус
-      </button>
-    </div>`;
-  } else {
-    html += `<div class="actions" style="grid-template-columns:1fr">
-      <button class="act-btn ab-blue" onclick="genReceipt(${order.row})">
-        <span class="act-ico">📄</span>Сформировать предчек
-      </button>
-    </div>`;
-  }
-
-  // ── Информация ──────────────────────────────────────
-  html += `<div class="sec">
-    <div class="sec-hdr">Информация</div>
-    <div class="sec-body">
-      <div class="row-item">
-        <div class="ri-ico">👤</div>
-        <div class="ri-body"><div class="ri-label">${esc(order.client)}</div><div class="ri-sub">Клиент</div></div>
-      </div>
-      ${order.contact ? `<div class="row-item"><div class="ri-ico">📱</div><div class="ri-body"><div class="ri-label">${esc(order.contact)}</div><div class="ri-sub">Способ связи</div></div></div>` : ''}
-      <div class="row-item">
-        <div class="ri-ico">📅</div>
-        <div class="ri-body"><div class="ri-label">${esc(order.event_date||'—')}${order.event_time?' в '+esc(order.event_time):''}</div><div class="ri-sub">Дата мероприятия</div></div>
-      </div>
-      <div class="row-item">
-        <div class="ri-ico">🚗</div>
-        <div class="ri-body"><div class="ri-label">${esc(order.delivery_type||'—')}</div>${order.address?`<div class="ri-sub">${esc(order.address)}</div>`:''}</div>
-      </div>
-      ${(order.note && order.note.trim()) ? `
-      <div class="row-item" style="background:rgba(255,248,220,0.7)">
-        <div class="ri-ico">📝</div>
-        <div class="ri-body">
-          <div class="ri-sub" style="margin-bottom:2px">Примечание</div>
-          <div class="ri-label" style="font-size:13px;line-height:1.4;white-space:pre-wrap">${esc(order.note)}</div>
-        </div>
-      </div>` : ''}
-    </div>
-  </div>`;
-
-  // ── Состав — всегда виден ────────────────────────────
-  if (dishes.length) {
-    html += `<div class="sec">
-      <div class="sec-hdr">Состав (${dishes.length} позиций)</div>
-      <div class="sec-body" style="padding:0">`;
-    dishes.forEach(d => {
-      const lt = ((+d.price||0)*(+d.qty||0)).toFixed(2);
-      html += `<div class="dish-row">
-        <div class="dr-name">${esc(d.name)}</div>
-        <div class="dr-qty">×${fmtQty(d.qty)} ${esc(d.unit||'')}</div>
-        <div class="dr-price">${lt} BYN</div>
-      </div>`;
-    });
-    html += `<div class="total-block">
-      <div class="total-line"><span>Блюда</span><span>${sub.toFixed(2)} BYN</span></div>`;
-    if (discP > 0) html += `<div class="total-line"><span>Скидка ${discP}%</span><span>−${discA.toFixed(2)} BYN</span></div>`;
-    if (delivery > 0) html += `<div class="total-line"><span>Доставка</span><span>${delivery.toFixed(2)} BYN</span></div>`;
-    html += `<div class="total-line big"><span>Итого</span><span class="tv">${total.toFixed(2)} BYN</span></div>`;
-    if (order.prepayment) html += `<div class="total-line" style="margin-top:4px"><span>Предоплата 50%</span><span>${prepayAmt} BYN</span></div>`;
-    html += `</div></div></div>`;
-  } else {
-    html += `<div class="sec"><div class="sec-hdr">Состав</div><div class="sec-body">
-      <div class="row-item"><div class="ri-body"><div class="ri-label" style="color:var(--hint)">
-        Обновите кеш кнопкой ↻ для загрузки состава
-      </div></div></div></div></div>`;
-  }
-
-  html += `<div style="height:16px"></div>`;
-  document.getElementById('order-detail-body').innerHTML = html;
-}
-
-// ══════════════════════════════════════════════════════════
-// СМЕНА СТАТУСА
-// ══════════════════════════════════════════════════════════
-function openStatusModal(row) {
-  const order = findOrder(row);
-  const statuses = [ST.NEW, ST.CONF, ST.COOK, ST.DONE, ST.CANC];
-  let html = '<div class="status-grid">';
-  statuses.forEach(s => {
-    const sc = statusClass(s);
-    const active = order && order.status === s ? ' on' : '';
-    html += `<button class="st-btn ${sc}${active}" onclick="changeStatus(${row},'${s}')">${s}</button>`;
-  });
-  html += '</div>';
-  document.getElementById('modal-body').innerHTML = html;
-  document.getElementById('modal').classList.add('on');
-}
-
-function closeModal() { document.getElementById('modal').classList.remove('on'); }
-
-function changeStatus(row, status) {
-  closeModal();
-  sendToBot({ action: 'change_status', order_row: row, status });
-  // Обновляем локально
-  const o = ACTIVE_ORDERS.find(o => o.row == row);
-  if (o) { o.status = status; }
-  // Если архивный — убираем из активных
-  if ([ST.DONE, ST.CANC].includes(status) && o) {
-    ACTIVE_ORDERS = ACTIVE_ORDERS.filter(x => x.row != row);
-    ARCHIVE_ORDERS.unshift({...o, status});
-  }
-  // Перерендерим детали и список
-  const updated = findOrder(row);
-  if (updated) renderOrderDetail(updated);
-  renderOrders();
-  showToast('Статус обновлён');
-}
-
-// ══════════════════════════════════════════════════════════
-// ПРЕДЧЕК / МАРШРУТ / СВЯЗЬ
-// ══════════════════════════════════════════════════════════
-function genReceipt(row) {
-  sendToBot({ action: 'get_receipt', order_row: row });
-  showToast('📄 Запрос отправлен боту');
-  if (twa) setTimeout(() => twa.close(), 600);
-}
-
-function openMapChoice(encodedAddr) {
-  const address = decodeURIComponent(encodedAddr || '');
-  if (!address || address === 'Самовывоз') { showToast('Адрес не указан'); return; }
-  const q = encodeURIComponent(address);
-  const apps = [
-    { name:'Google Карты',     url:`https://maps.google.com/?q=${q}` },
-    { name:'Яндекс Карты',     url:`https://maps.yandex.ru/?text=${q}` },
-    { name:'Яндекс Навигатор', url:`https://yandex.ru/maps/?rtext=~${q}&rtt=auto` },
-  ];
-  const body = document.getElementById('modal-body');
-  body.innerHTML = `<div style="padding:0 12px 16px;display:flex;flex-direction:column;gap:8px">`+
-    apps.map(a=>`<button onclick="window.open('${a.url}','_blank');closeModal()"
-      style="height:46px;border:1px solid var(--border);border-radius:var(--rad-s);background:var(--bg);
-             font-size:15px;font-family:inherit;color:var(--text);cursor:pointer;text-align:left;
-             padding:0 16px">${a.name}</button>`).join('')+
-    `</div>`;
-  document.getElementById('modal').classList.add('on');
-}
-
-function contactClient(contact) {
-  if (!contact) { showToast('Контакт не указан'); return; }
-  if (contact.toLowerCase().includes('телеграм') || contact.toLowerCase().includes('telegram')) {
-    showToast('Откройте Telegram и напишите клиенту');
-  } else {
-    showToast('Контакт: ' + contact);
-  }
-}
-
-// ══════════════════════════════════════════════════════════
-// РЕДАКТИРОВАНИЕ ЗАКАЗА (открывает форму нового с данными)
-// ══════════════════════════════════════════════════════════
-function openEditOrder() {
-  const order = findOrder(currentOrderRow);
-  if (!order) return;
-  editingRow = order.row;
-
-  document.getElementById('o-client').value  = order.client || '';
-  document.getElementById('o-contact').value = order.contact || '';
-  document.getElementById('o-date').value    = dateToISO(order.event_date || '');
-  document.getElementById('o-time').value    = order.event_time || '';
-  setDeliv(order.delivery_type || 'Самовывоз', null, true);
-  document.getElementById('o-addr').value   = order.address || '';
-  document.getElementById('o-dcost').value  = order.delivery || '';
-  setPay(!!order.prepayment, null, true);
-
-  // Загружаем блюда из полного кеша в корзину
-  cart = {};
-  const dishes = order.dishes || [];
-  if (dishes.length) {
-    dishes.forEach((d, i) => {
-      // Ищем блюдо в меню чтобы получить его id
-      const menuDish = MENU.find(m => m.name === d.name);
-      const id = menuDish ? String(menuDish.id) : ('e' + i);
-      cart[id] = {
-        d: { id, name: d.name, cat: menuDish ? (menuDish.cat||'') : '' },
-        q: +d.qty || 1,
-        p: +d.price || 0,
-        manual: !menuDish,
-      };
-    });
-    showToast('Редактирование заказа #' + order.row + ' · ' + dishes.length + ' блюд');
-  } else {
-    showToast('⚠️ Состав не загружен — обновите кеш');
-  }
-
-  pushScreen('s-new-details');
-}
-
-// ══════════════════════════════════════════════════════════
-// НОВЫЙ ЗАКАЗ — ДЕТАЛИ
-// ══════════════════════════════════════════════════════════
-function initNewOrder() {
-  editingRow = null;
-  cart = {};
-  document.getElementById('o-client').value  = '';
-  document.getElementById('o-contact').value = '';
-  document.getElementById('o-date').value    = '';
-  document.getElementById('o-time').value    = '';
-  document.getElementById('o-addr').value    = '';
-  document.getElementById('o-dcost').value   = '';
-  document.getElementById('ai-txt').value    = '';
-  document.getElementById('ai-res').style.display = 'none';
-  setDeliv('Самовывоз', null, true);
-  setPay(true, null, true);
-  document.getElementById('nd-sub').textContent = 'Шаг 1 из 3';
-}
-
-function setDeliv(v, btn, silent) {
-  delivType = v;
-  document.querySelectorAll('#tg-deliv .f-tgl-btn').forEach((b,i) => {
-    b.classList.toggle('on', i === (v==='Доставка'?1:0));
-  });
-  document.getElementById('deliv-extra').style.display = v==='Доставка' ? 'block' : 'none';
-  if (!silent) updCart();
-}
-
-function setPay(v, btn, silent) {
-  prepay = v;
-  document.querySelectorAll('#tg-pay .f-tgl-btn').forEach((b,i) => {
-    b.classList.toggle('on', v ? i===0 : i===1);
-  });
-}
-
-// ══════════════════════════════════════════════════════════
-// АВТОДОПОЛНЕНИЕ КЛИЕНТА
-// ══════════════════════════════════════════════════════════
-function onClientInput() {
-  const q = document.getElementById('o-client').value.trim().toLowerCase();
-  const dd = document.getElementById('c-drop');
-  if (!q || !CLIENTS.length) { dd.classList.remove('on'); return; }
-  const hits = CLIENTS.filter(c => c.name.toLowerCase().includes(q)).slice(0,8);
-  if (!hits.length) { dd.classList.remove('on'); return; }
-  dd._hits = hits;
-  dd.innerHTML = hits.map((c,i) => `
-    <div class="c-opt" onclick="pickClient(${i})">
-      <div class="c-opt-n">${esc(c.name)}</div>
-      <div class="c-opt-s">${esc(c.contact||'')}${c.type?' · '+esc(c.type):''}${c.address?' · '+esc(c.address):''}</div>
-    </div>`).join('');
-  dd.classList.add('on');
-}
-
-function pickClient(i) {
-  const c = document.getElementById('c-drop')._hits[i];
-  document.getElementById('o-client').value  = c.name;
-  document.getElementById('o-contact').value = c.contact || '';
-  setDeliv(c.type || 'Самовывоз', null, true);
-  if (c.address) document.getElementById('o-addr').value = c.address;
-  document.getElementById('c-drop').classList.remove('on');
-}
-
-function clearClient() {
-  document.getElementById('o-client').value = '';
-  document.getElementById('c-drop').classList.remove('on');
-}
-
-document.addEventListener('click', e => {
-  if (!e.target.closest('.cw')) document.getElementById('c-drop').classList.remove('on');
-});
-
-// ══════════════════════════════════════════════════════════
-// AI ИМПОРТ
-// ══════════════════════════════════════════════════════════
-function runAI() {
-  const txt = document.getElementById('ai-txt').value.trim();
-  if (!txt) { showToast('Вставьте сообщение клиента'); return; }
-  // Генерируем уникальный request_id
-  const request_id = 'ai_' + Date.now();
-  // Сохраняем в sessionStorage чтобы подхватить при возврате
-  sessionStorage.setItem('pending_ai_id', request_id);
-  // Отправляем в бота и закрываем Web App
-  sendToBot({ action: 'ai_request', text: txt, request_id });
-  showToast('🤖 Отправлено боту, ожидайте ответа');
-  // Бот ответит с кнопкой ?ai_result=ID которая откроет нас снова
-  if (twa) setTimeout(() => twa.close(), 600);
-}
-
-// Загружает AI-результат из кеша по request_id (приходит в URL)
-async function loadAIResult(request_id) {
-  // Данные хранятся в кеше GitHub в поле ai_results (если бот туда пишет)
-  // Пока используем простой fallback — показываем инструкцию
-  showToast('Результат AI получен — добавьте блюда вручную или из распознанного списка');
-}
-
-// ══════════════════════════════════════════════════════════
-// КАТАЛОГ
-// ══════════════════════════════════════════════════════════
-function goToCatalog() {
-  buildChips('chips', MENU, filterMenu);
-  filterMenu();
-  pushScreen('s-catalog');
-}
-
-function buildChips(containerId, menu, filterFn) {
-  const cats = ['Все', ...new Set(menu.map(d => d.cat).filter(Boolean))];
-  const el = document.getElementById(containerId);
-  el.innerHTML = '';
-  cats.forEach((c,i) => {
-    const ch = document.createElement('div');
-    ch.className = 'chip' + (i===0?' on':'');
-    ch.textContent = c;
-    ch.onclick = () => {
-      el.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
-      ch.classList.add('on');
-      filterFn();
-    };
-    el.appendChild(ch);
-  });
-}
-
-function filterMenu() {
-  const q   = (document.getElementById('srch').value || '').toLowerCase();
-  const cat = document.querySelector('#chips .chip.on')?.textContent || 'Все';
-  const list = MENU.filter(d =>
-    (cat==='Все' || d.cat===cat) && (!q || d.name.toLowerCase().includes(q))
-  );
-  const el = document.getElementById('menu-list');
-  el.innerHTML = '';
-  list.forEach(d => {
-    const id  = String(d.id);
-    const qty = cart[id]?.q || 0;
-    const row = document.createElement('div');
-    row.className = 'd-row';
-    row.innerHTML = `
-      <div class="d-info">
-        <div class="d-name">${esc(d.name)}</div>
-        <div class="d-cat">${esc(d.cat||'')}</div>
-      </div>
-      <div class="d-price">${(+d.price).toFixed(2)} BYN</div>
-      ${qty===0
-        ? `<button class="d-add" onclick="addToCart('${id}')">+</button>`
-        : `<div class="qc">
-             <button class="qb" onclick="chQ('${id}',-1)">−</button>
-             <div class="qv" id="qv-${id}">${qty}</div>
-             <button class="qb" onclick="chQ('${id}',1)">+</button>
-           </div>`}`;
-    el.appendChild(row);
-  });
-  document.getElementById('cat-sub').textContent = Object.keys(cart).length + ' в корзине';
-}
-
-function addToCart(id) {
-  const d = MENU.find(m => String(m.id)===id);
-  if (!d) return;
-  if (!cart[id]) cart[id] = { d:{id,name:d.name,cat:d.cat||''}, q:0, p:+d.price||0 };
-  cart[id].q++;
-  updCart(); filterMenu();
-}
-
-function chQ(id, delta) {
-  if (!cart[id]) return;
-  cart[id].q += delta;
-  if (cart[id].q <= 0) delete cart[id];
-  updCart(); filterMenu();
-}
-
-// ══════════════════════════════════════════════════════════
-// РУЧНОЕ ДОБАВЛЕНИЕ
-// ══════════════════════════════════════════════════════════
-function addManual() {
-  const name  = document.getElementById('m-name').value.trim();
-  const price = parseFloat(document.getElementById('m-price').value) || 0;
-  const qty   = parseInt(document.getElementById('m-qty').value) || 1;
-  if (!name) { showToast('Укажите название'); return; }
-  if (price <= 0) { showToast('Укажите цену'); return; }
-  const id = 'm' + (manualId++);
-  cart[id] = { d:{id,name,cat:'Вручную'}, q:qty, p:price, manual:true };
-  document.getElementById('m-name').value  = '';
-  document.getElementById('m-price').value = '';
-  document.getElementById('m-qty').value   = '';
-  updCart();
-  showToast('✓ Добавлено: ' + name);
-}
-
-// ══════════════════════════════════════════════════════════
-// КОРЗИНА
-// ══════════════════════════════════════════════════════════
-function goToCart() {
-  renderCartFull();
-  pushScreen('s-cart');
-}
-
-function renderCartFull() {
-  const keys = Object.keys(cart);
-  const empty = document.getElementById('cart-empty');
-  const items = document.getElementById('cart-items');
-  const noteW = document.getElementById('cart-note-wrap');
-  const sv    = document.getElementById('sv-btn');
-
-  if (!keys.length) {
-    empty.style.display = 'flex';
-    items.innerHTML = '';
-    noteW.style.display = 'none';
-    sv.disabled = true;
-    document.getElementById('cart-sub').textContent = 'Пусто';
-    return;
-  }
-
-  empty.style.display = 'none';
-  noteW.style.display = 'block';
-  sv.disabled = false;
-
-  const discount = parseFloat(document.getElementById('c-discount')?.value||0) || 0;
-
-  items.innerHTML = `
-    <div class="discount-wrap">
-      <span class="dw-l">Скидка</span>
-      <input class="dw-inp" type="number" id="c-discount" value="${discount||''}" placeholder="0" min="0" max="100" step="1" oninput="updCart()"/>
-      <span class="dw-pct">%</span>
-    </div>` +
-    keys.map(k => {
-      const it = cart[k];
-      return `<div class="ci" id="ci-${k}">
-        <div class="ci-top">
-          <div class="ci-name">${esc(it.d.name)}${it.manual?'<br><span style="font-size:11px;color:var(--hint)">вручную</span>':''}</div>
-          <button class="ci-del" onclick="removeFromCart('${k}')">✕</button>
-        </div>
-        <div class="ci-bot">
-          <div class="ci-pe">
-            <div class="qc">
-              <button class="qb" onclick="chCartQ('${k}',-1)">−</button>
-              <div class="qv">${it.q}</div>
-              <button class="qb" onclick="chCartQ('${k}',1)">+</button>
-            </div>
-            <span class="ci-unit" style="margin:0 4px">×</span>
-            <input class="ci-pi" type="number" value="${it.p.toFixed(2)}" step="0.5" min="0"
-                   onchange="chCartPrice('${k}',this.value)"/>
-            <span class="ci-unit">BYN</span>
-          </div>
-          <div class="ci-total" id="cit-${k}">= ${(it.q*it.p).toFixed(2)} BYN</div>
-        </div>
-      </div>`;
-    }).join('');
-
-  updCart();
-}
-
-function removeFromCart(id) {
-  delete cart[id];
-  renderCartFull();
-  updCart();
-}
-
-function chCartQ(id, d) {
-  if (!cart[id]) return;
-  cart[id].q += d;
-  if (cart[id].q <= 0) { delete cart[id]; renderCartFull(); return; }
-  document.querySelector(`#ci-${CSS.escape(id)} .qv`).textContent = cart[id].q;
-  const t = document.getElementById('cit-'+id);
-  if (t) t.textContent = '= '+(cart[id].q*cart[id].p).toFixed(2)+' BYN';
-  updCart();
-}
-
-function chCartPrice(id, v) {
-  if (!cart[id]) return;
-  cart[id].p = parseFloat(v) || 0;
-  const t = document.getElementById('cit-'+id);
-  if (t) t.textContent = '= '+(cart[id].q*cart[id].p).toFixed(2)+' BYN';
-  updCart();
-}
-
-function updCart() {
-  const keys   = Object.keys(cart);
-  const qty    = keys.reduce((s,k) => s+cart[k].q, 0);
-  const sub    = keys.reduce((s,k) => s+cart[k].q*cart[k].p, 0);
-  const disc   = parseFloat(document.getElementById('c-discount')?.value||0) || 0;
-  const discA  = (sub*disc/100);
-  const deliv  = delivType==='Доставка' ? (parseFloat(document.getElementById('o-dcost')?.value)||0) : 0;
-  const total  = sub - discA + deliv;
-
-  document.getElementById('c-total').textContent = total.toFixed(2).replace('.',',');
-  document.getElementById('cart-sub').textContent = keys.length+' позиций, '+qty+' шт';
-
-  // Строки футера
-  const lines = document.getElementById('cart-footer-lines');
-  if (lines) {
-    let html = `<div class="cf-line"><span>Блюда (${keys.length} поз.)</span><span>${sub.toFixed(2)} BYN</span></div>`;
-    if (disc>0) html += `<div class="cf-line"><span>Скидка ${disc}%</span><span>−${discA.toFixed(2)} BYN</span></div>`;
-    if (deliv>0) html += `<div class="cf-line"><span>Доставка</span><span>${deliv.toFixed(2)} BYN</span></div>`;
-    lines.innerHTML = html;
-  }
-
-  const sv = document.getElementById('sv-btn');
-  if (sv) sv.disabled = keys.length === 0;
-}
-
-// ══════════════════════════════════════════════════════════
-// СОХРАНЕНИЕ ЗАКАЗА
-// ══════════════════════════════════════════════════════════
-function saveOrder() {
-  const client = document.getElementById('o-client').value.trim();
-  const date   = document.getElementById('o-date').value;
-  const keys   = Object.keys(cart);
-
-  if (!client)    { showToast('Укажите клиента'); return; }
-  if (!date)      { showToast('Укажите дату'); return; }
-  if (!keys.length){ showToast('Корзина пуста'); return; }
-
-  const dcost = delivType==='Доставка' ? (parseFloat(document.getElementById('o-dcost').value)||0) : 0;
-  const disc  = parseFloat(document.getElementById('c-discount')?.value||0) || 0;
-
-  const payload = {
-    action: editingRow ? 'edit_order' : 'create_order',
-    order_row: editingRow || undefined,
-    client,
-    contact:        document.getElementById('o-contact').value || '',
-    event_date:     date.split('-').reverse().join('.'),
-    event_time:     document.getElementById('o-time').value || '',
-    delivery_type:  delivType,
-    address:        delivType==='Доставка' ? (document.getElementById('o-addr').value||'') : '',
-    delivery:       dcost,
-    prepayment:     prepay,
-    discount_percent: disc,
-    note:           document.getElementById('c-note')?.value || '',
-    dishes: keys.map(k => ({
-      name:  cart[k].d.name,
-      qty:   cart[k].q,
-      price: cart[k].p,
-      cost:  0,
-      unit:  'порц.',
-    })),
-  };
-
-  sendToBot(payload);
-  showToast(editingRow ? '✓ Заказ обновлён' : '✓ Заказ создан');
-  if (twa) setTimeout(() => twa.close(), 800);
-}
-
-// ══════════════════════════════════════════════════════════
-// ЗАКУПКИ
-// ══════════════════════════════════════════════════════════
-function renderShopping() {
-  const el = document.getElementById('shopping-list');
-  const rem = SHOPPING.filter(i => !i.bought).length;
-  const bdg = document.getElementById('bdg-shop');
-  bdg.textContent = rem;
-  bdg.classList.toggle('on', rem > 0);
-
-  if (!SHOPPING.length) {
-    el.innerHTML = `<div class="empty-state">
-      <div class="empty-ico">🛒</div>
-      <div class="empty-title">Список закупок пуст</div>
-      <div class="empty-sub">Добавьте активные заказы и список сформируется автоматически</div>
-    </div>`;
-    return;
-  }
-
-  // Группируем по "куплено"
-  const notBought = SHOPPING.filter(i => !i.bought);
-  const bought    = SHOPPING.filter(i => i.bought);
-
-  let html = '';
-  if (notBought.length) {
-    html += `<div class="sec" style="margin-top:12px">
-      <div class="sec-hdr">Купить (${notBought.length})</div>
-      <div class="sec-body" style="padding:0">`;
-    notBought.forEach((it,i) => {
-      const idx = SHOPPING.indexOf(it);
-      html += `<div class="sh-item" onclick="toggleBought(${idx})">
-        <div class="sh-chk"></div>
-        <div class="sh-body">
-          <div class="sh-name">${esc(it.name)}</div>
-          <div class="sh-qty">${it.qty} ${esc(it.unit||'')}</div>
-        </div>
-        ${it.price?`<div class="sh-price">${(+it.price).toFixed(2)} BYN</div>`:''}
-      </div>`;
-    });
-    html += '</div></div>';
-  }
-
-  if (bought.length) {
-    html += `<div class="sec">
-      <div class="sec-hdr">Куплено (${bought.length})</div>
-      <div class="sec-body" style="padding:0">`;
-    bought.forEach((it) => {
-      const idx = SHOPPING.indexOf(it);
-      html += `<div class="sh-item" onclick="toggleBought(${idx})">
-        <div class="sh-chk on"></div>
-        <div class="sh-body">
-          <div class="sh-name done">${esc(it.name)}</div>
-          <div class="sh-qty">${it.qty} ${esc(it.unit||'')}</div>
-        </div>
-        ${it.price?`<div class="sh-price">${(+it.price).toFixed(2)} BYN</div>`:''}
-      </div>`;
-    });
-    html += '</div></div>';
-  }
-
-  el.innerHTML = html;
-}
-
-function toggleBought(idx) {
-  const it = SHOPPING[idx];
-  if (!it) return;
-  it.bought = !it.bought;
-  if (it.bought) {
-    sendToBot({ action: 'mark_bought', item_name: it.name, price: it.price || 0 });
-  }
-  renderShopping();
-}
-
-// ══════════════════════════════════════════════════════════
-// МЕНЮ-РЕДАКТОР
-// ══════════════════════════════════════════════════════════
-function renderMenuEdit() {
-  const el = document.getElementById('menu-edit-list');
-  document.getElementById('menu-edit-sub').textContent = MENU.length + ' блюд';
-
-  // Чипы для редактора
-  buildChips('menu-chips', MENU, filterMenuEdit);
-
-  filterMenuEdit();
-}
-
-function filterMenuEdit() {
-  const q   = (document.getElementById('menu-srch').value || '').toLowerCase();
-  const cat = document.querySelector('#menu-chips .chip.on')?.textContent || 'Все';
-  const list = MENU.filter(d =>
-    (cat==='Все' || d.cat===cat) && (!q || d.name.toLowerCase().includes(q))
-  );
-  const el = document.getElementById('menu-edit-list');
-  el.innerHTML = list.map(d =>
-    `<div class="menu-edit-row" onclick="openDishEdit('${esc(String(d.id))}')">
-      <div class="me-info">
-        <div class="me-name">${esc(d.name)}</div>
-        <div class="me-cat">${esc(d.cat||'—')} · ${esc(d.unit||'порц.')}</div>
-      </div>
-      <div class="me-price">${(+d.price||0).toFixed(2)} BYN</div>
-      <div class="me-arr">›</div>
-    </div>`
-  ).join('');
-}
-
-function openDishEdit(id) {
-  const d = MENU.find(m => String(m.id) === String(id));
-  editingDishId = id;
-
-  document.getElementById('dish-edit-title').textContent = d ? 'Редактировать блюдо' : 'Новое блюдо';
-  document.getElementById('de-name').value  = d?.name  || '';
-  document.getElementById('de-cat').value   = d?.cat   || '';
-  document.getElementById('de-price').value = d?.price || '';
-  document.getElementById('de-cost').value  = d?.cost  || '';
-  document.getElementById('de-unit').value  = d?.unit  || 'порц.';
-
-  // Datalist категорий
-  const dl = document.getElementById('cat-list');
-  dl.innerHTML = [...new Set(MENU.map(m=>m.cat).filter(Boolean))].map(c=>`<option value="${esc(c)}">`).join('');
-
-  pushScreen('s-dish-edit');
-}
-
-function openNewDishForm() {
-  editingDishId = null;
-  openDishEdit(null);
-}
-
-function saveDishEdit() {
-  const name  = document.getElementById('de-name').value.trim();
-  const cat   = document.getElementById('de-cat').value.trim();
-  const price = parseFloat(document.getElementById('de-price').value) || 0;
-  const cost  = parseFloat(document.getElementById('de-cost').value)  || 0;
-  const unit  = document.getElementById('de-unit').value;
-
-  if (!name) { showToast('Укажите название'); return; }
-
-  sendToBot({
-    action:   editingDishId ? 'edit_dish' : 'create_dish',
-    dish_id:  editingDishId,
-    name, cat, price, cost, unit,
-  });
-
-  // Обновляем локально
-  if (editingDishId) {
-    const d = MENU.find(m => String(m.id) === String(editingDishId));
-    if (d) { d.name=name; d.cat=cat; d.price=price; d.cost=cost; d.unit=unit; }
-  } else {
-    const newId = 'new_' + Date.now();
-    MENU.push({id:newId, name, cat, price, cost, unit});
-  }
-
-  showToast(editingDishId ? '✓ Блюдо обновлено' : '✓ Блюдо добавлено');
-  goBack();
-  filterMenuEdit();
-}
-
-// ══════════════════════════════════════════════════════════
-// URL PARAMS — открываем нужный экран по параметру
-// ══════════════════════════════════════════════════════════
-function handleURLParams() {
-  const params   = new URLSearchParams(window.location.search);
-  const editRow  = params.get('edit');
-  const tabParam = params.get('tab');
-  const aiResult = params.get('ai_result');
-
-  if (tabParam === 'shopping') {
-    switchTab('shopping', document.querySelector('.tb:nth-child(3)'));
-    return;
-  }
-
-  if (editRow) {
-    setTimeout(() => {
-      const row = parseInt(editRow);
-      currentOrderRow = row;
-      const order = findOrder(row);
-      if (order) {
-        openOrderDetail(row);
-        setTimeout(openEditOrder, 100);
-      }
-    }, 300);
-    return;
-  }
-
-  if (aiResult) {
-    // Возврат после AI — переходим на вкладку Новый заказ
-    switchTab('new', document.querySelector('.tb:nth-child(2)'));
-    showToast('🤖 AI обработал запрос — проверьте результат в боте и добавьте блюда');
-  }
-}
-
-// ══════════════════════════════════════════════════════════
-// ВСПОМОГАЛКИ
-// ══════════════════════════════════════════════════════════
-function esc(s) {
-  return String(s||'')
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;')
-    .replace(/'/g,'&#39;');
-}
-
-function dateToISO(d) {
-  // дд.мм.гггг → гггг-мм-дд
-  if (!d || !d.includes('.')) return d;
-  const [dd,mm,yy] = d.split('.');
-  return `${yy}-${mm}-${dd}`;
-}
-
-// ══════════════════════════════════════════════════════════
-// ЗАПУСК
-// ══════════════════════════════════════════════════════════
-async function init() {
-  await loadCache();
-
-  document.getElementById('loader').style.display = 'none';
-  document.getElementById('app').style.display    = 'flex';
-
-  // Первый рендер
-  renderOrders();
-
-  // Обработка URL параметров
-  handleURLParams();
-}
-
-init();
-</script>
+<script src="js/api.js"></script>
+<script src="js/render.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
