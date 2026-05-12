@@ -7,7 +7,12 @@
 function parseDateNum(d) {
   if (!d) return 0;
   const p = d.split(".");
-  return p.length === 3 ? parseInt(p[2] + p[1] + p[0], 10) : 0;
+  if (p.length === 3) return parseInt(p[2] + p[1] + p[0], 10); // 20260522
+  if (p.length === 2) {
+    const yr = new Date().getFullYear(); 
+    return parseInt(yr + p[1] + p[0], 10); // Если года нет, подставляем текущий
+  }
+  return 0;
 }
 
 // ── Вспомогательные ──────────────────────────────────────
@@ -173,7 +178,7 @@ function renderActiveGrouped(el, list) {
 // Архив — по date_order убыванию (свежие сверху), без группировки
 function renderArchiveList(el, list) {
   const sorted = [...list].sort((a, b) =>
-    (b.date_order || "").localeCompare(a.date_order || "")
+    parseDateNum(b.date_order) - parseDateNum(a.date_order)
   );
   el.innerHTML = sorted.map(o => orderCardHTML(o, false)).join('');
   attachSwipeHandlers(el);
