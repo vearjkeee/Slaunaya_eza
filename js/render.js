@@ -400,52 +400,76 @@ function renderShopping(shopping) {
   bdg.classList.toggle('on', rem > 0);
 
   if (!shopping.length) {
-    el.innerHTML = `<div class="empty-state">
-      <div class="empty-ico">🛒</div>
-      <div class="empty-title">Список закупок пуст</div>
-      <div class="empty-sub">Подтвердите активные заказы — список сформируется автоматически</div>
+    el.innerHTML = `<div class="sh-empty">
+      <div style="font-size:44px;margin-bottom:8px">🛒</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">Список закупок пуст</div>
+      <div>Напишите или надиктуйте список<br>и разберите через AI</div>
     </div>`;
+    _updateConfirmBar(shopping);
     return;
   }
 
+  // Группируем по категориям, некупленные первыми
   const notBought = shopping.filter(i => !i.bought);
   const bought    = shopping.filter(i => i.bought);
+
   let html = '';
 
+  // Некупленные — по категориям
   if (notBought.length) {
-    html += `<div class="sec" style="margin-top:12px">
-      <div class="sec-hdr">Купить (${notBought.length})</div>
-      <div class="sec-body" style="padding:0">`;
-    notBought.forEach((it, _) => {
-      const idx = shopping.indexOf(it);
-      html += shoppingItemHTML(it, idx);
+    const byCat = {};
+    notBought.forEach(it => {
+      const c = it.category || 'Разное';
+      if (!byCat[c]) byCat[c] = [];
+      byCat[c].push(it);
     });
-    html += '</div></div>';
+    Object.keys(byCat).sort().forEach(cat => {
+      html += `<div class="sh-cat-hdr">${esc(cat)}</div>`;
+      html += `<div class="sec" style="margin:0 12px 0;border-radius:0">
+        <div style="padding:0">`;
+      byCat[cat].forEach(it => { html += shoppingItemHTML(it); });
+      html += `</div></div>`;
+    });
   }
 
+  // Куплено — одна группа в конце
   if (bought.length) {
-    html += `<div class="sec">
-      <div class="sec-hdr">Куплено (${bought.length})</div>
-      <div class="sec-body" style="padding:0">`;
-    bought.forEach(it => {
-      const idx = shopping.indexOf(it);
-      html += shoppingItemHTML(it, idx);
-    });
-    html += '</div></div>';
+    html += `<div class="sh-cat-hdr" style="margin-top:8px">✅ Куплено (${bought.length})</div>`;
+    html += `<div class="sec" style="margin:0 12px 8px;border-radius:0">
+      <div style="padding:0">`;
+    bought.forEach(it => { html += shoppingItemHTML(it); });
+    html += `</div></div>`;
   }
+
+  html += `<div style="height:80px"></div>`; // отступ под confirm-bar
 
   el.innerHTML = html;
+  _updateConfirmBar(shopping);
 }
 
-function shoppingItemHTML(it, idx) {
-  return `<div class="sh-item" onclick="toggleBought(${idx})">
-    <div class="sh-chk${it.bought?' on':''}"></div>
+function shoppingItemHTML(it) {
+  return `<div class="sh-item" onclick="toggleBought('${esc(it.id)}')">
+    <div class="sh-chk${it.bought ? ' on' : ''}"></div>
     <div class="sh-body">
-      <div class="sh-name${it.bought?' done':''}">${esc(it.name)}</div>
-      <div class="sh-qty">${it.qty} ${esc(it.unit||'')}</div>
+      <div class="sh-name${it.bought ? ' done' : ''}">${esc(it.name)}</div>
+      <div class="sh-qty">${fmtQty(it.qty)} ${esc(it.unit || '')}</div>
     </div>
-    ${it.price ? `<div class="sh-price">${(+it.price).toFixed(2)} BYN</div>` : ''}
   </div>`;
+}
+
+function _updateConfirmBar(shopping) {
+  const bar     = document.getElementById('sh-confirm-bar');
+  const boughtN = (shopping || []).filter(i => i.bought).length;
+  if (!bar) return;
+  if (boughtN > 0) {
+    bar.innerHTML = `<button class="sh-confirm-btn" onclick="confirmShoppingPurchase()">
+      ✓ Подтвердить покупку (${boughtN} позиций)
+    </button>`;
+    bar.classList.add('on');
+  } else {
+    bar.classList.remove('on');
+    bar.innerHTML = '';
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -478,7 +502,7 @@ function renderMenuEdit(menu, query, activeCat) {
 let _confirmCallback = null;
 let _cancelCallback  = null;
 
-function showConfirm(title, text, okLabel, onOk, onCancel, danger = false) {
+function showConfirm(title, text, okLabel, onOk, onCancel, danger = false, extra = null) {
   _confirmCallback = onOk;
   _cancelCallback  = onCancel || null;
   document.getElementById('cd-title').textContent = title;
@@ -486,6 +510,24 @@ function showConfirm(title, text, okLabel, onOk, onCancel, danger = false) {
   const okBtn = document.getElementById('cd-ok');
   okBtn.textContent = okLabel;
   okBtn.className   = 'cd-btn cd-ok' + (danger ? ' danger' : '');
+
+  // Вторая кнопка (для merge/replace)
+  const btns = document.querySelector('.cd-btns');
+  const existing2 = document.getElementById('cd-second');
+  if (existing2) existing2.remove();
+  if (extra?.secondBtn) {
+    const btn2 = document.createElement('button');
+    btn2.id        = 'cd-second';
+    btn2.className = 'cd-btn cd-ok';
+    btn2.style.background = 'var(--blue)';
+    btn2.textContent = extra.secondBtn;
+    btn2.onclick = () => {
+      document.getElementById('confirm-dialog').classList.remove('on');
+      extra.secondCb?.();
+    };
+    btns.insertBefore(btn2, okBtn);
+  }
+
   document.getElementById('confirm-dialog').classList.add('on');
 }
 
