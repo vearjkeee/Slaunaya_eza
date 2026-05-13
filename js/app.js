@@ -169,7 +169,7 @@ function renderCurrentTab() {
   if (currentTab === 'orders')   renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
   if (currentTab === 'shopping') renderShopping(SHOPPING);
   if (currentTab === 'menu')     { renderMenuChips(); renderMenuEdit(MENU, menuEditQuery, menuEditCat); }
-  if (currentTab === 'dashboard') { /* заглушка, ничего не рендерим */ }
+  if (currentTab === 'dashboard') loadDashboard();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -927,6 +927,10 @@ function handleURLParams() {
   const tabParam = params.get('tab');
   const aiResult = params.get('ai_result');
 
+  if (tabParam === 'dashboard') {
+    switchTab('dashboard', document.querySelector('.tb:nth-child(4)'));
+    return;
+  }
   if (tabParam === 'shopping') {
     switchTab('shopping', document.querySelector('.tb:nth-child(3)'));
     return;
