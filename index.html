@@ -273,17 +273,21 @@
         </button>
       </div>
 
-      <!-- Кнопки очистки -->
+      <!-- Кнопка очистки всего -->
       <div class="sh-actions-bar">
-        <button class="sh-act-btn sh-act-ghost" onclick="clearBoughtShopping()">
-          ✅ Очистить купленные
-        </button>
-        <button class="sh-act-btn sh-act-danger" onclick="clearAllShopping()">
+        <button class="sh-act-btn sh-act-danger" style="flex:none;padding:0 16px"
+                onclick="clearAllShopping()">
           🗑 Очистить всё
         </button>
+        <span style="font-size:12px;color:var(--hint);line-height:1.4">
+          Отмечайте позиции в магазине,<br>затем нажмите «Подтвердить»
+        </span>
       </div>
 
       <div class="scroll" id="shopping-list"></div>
+
+      <!-- Плавающая кнопка подтверждения покупки -->
+      <div class="sh-confirm-bar" id="sh-confirm-bar"></div>
     </div>
 
     <!-- ══ ВКЛАДКА 5: ДАШБОРД (заглушка) ══════════════════ -->
