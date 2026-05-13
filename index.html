@@ -290,16 +290,22 @@
       <div class="sh-confirm-bar" id="sh-confirm-bar"></div>
     </div>
 
-    <!-- ══ ВКЛАДКА 5: ДАШБОРД (заглушка) ══════════════════ -->
+<!-- ══ ВКЛАДКА 5: ДАШБОРД ══════════════════════════════ -->
     <div class="scr" id="s-dashboard">
-      <div class="cache-bar">
-        <span class="cache-time">Финансы</span>
+
+      <!-- Переключатель месяца -->
+      <div class="db-month-bar">
+        <button class="db-month-btn" onclick="dashShiftMonth(-1)">‹</button>
+        <div class="db-month-label" id="db-month-label">Май 2026</div>
+        <button class="db-month-btn" onclick="dashShiftMonth(1)" id="db-month-next">›</button>
       </div>
-      <div class="empty-state">
-        <div class="empty-ico">📊</div>
-        <div class="empty-title">Дашборд</div>
-        <div class="empty-sub">Скоро здесь появится статистика,<br>доходы и расходы</div>
+
+      <div class="scroll" id="dashboard-body">
+        <div class="empty-state">
+          <div class="spin" style="width:28px;height:28px;border-width:2px"></div>
+        </div>
       </div>
+
     </div>
 
     <!-- ══ ВКЛАДКА 4: МЕНЮ-РЕДАКТОР ════════════════════════ -->
