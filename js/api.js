@@ -60,3 +60,21 @@ function sourceLabel(source) {
   if (source === "gas-cache") return " · 🟡 кеш";
   return " · ⚪ GitHub";
 }
+
+// ══════════════════════════════════════════════════════════
+// ДАШБОРД
+// ══════════════════════════════════════════════════════════
+async function fetchDashboard(month, year) {
+  if (!GAS_URL) return null;
+  try {
+    const url = `${GAS_URL}?action=getDashboard&month=${month}&year=${year}&t=${Date.now()}`;
+    const r   = await fetch(url, { redirect: "follow" });
+    if (r.ok) {
+      const data = await r.json();
+      if (!data.error) return data;
+    }
+  } catch (e) {
+    console.warn("[api] dashboard error:", e);
+  }
+  return null;
+}
