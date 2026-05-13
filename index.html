@@ -252,13 +252,50 @@
       </div>
     </div>
 
-    <!-- ══ ВКЛАДКА 3: ЗАКУПКИ ═══════════════════════════════ -->
+<!-- ══ ВКЛАДКА 3: ЗАКУПКИ ═══════════════════════════════ -->
     <div class="scr" id="s-shopping">
       <div class="cache-bar">
         <span class="cache-time" id="cache-time2">—</span>
         <button class="refresh-btn" onclick="forceReload()">↻ Обновить</button>
       </div>
+
+      <!-- Панель ввода -->
+      <div class="sh-input-panel">
+        <div class="sh-ta-wrap">
+          <textarea class="sh-ta" id="sh-text" rows="2"
+                    placeholder="Напишите или надиктуйте список…"></textarea>
+          <button class="sh-mic-btn" id="sh-mic" onclick="toggleSpeech()" title="Голосовой ввод">
+            🎤
+          </button>
+        </div>
+        <button class="sh-send-btn" id="sh-send" onclick="submitShopping()">
+          ✦ Разобрать через AI
+        </button>
+      </div>
+
+      <!-- Кнопки очистки -->
+      <div class="sh-actions-bar">
+        <button class="sh-act-btn sh-act-ghost" onclick="clearBoughtShopping()">
+          ✅ Очистить купленные
+        </button>
+        <button class="sh-act-btn sh-act-danger" onclick="clearAllShopping()">
+          🗑 Очистить всё
+        </button>
+      </div>
+
       <div class="scroll" id="shopping-list"></div>
+    </div>
+
+    <!-- ══ ВКЛАДКА 5: ДАШБОРД (заглушка) ══════════════════ -->
+    <div class="scr" id="s-dashboard">
+      <div class="cache-bar">
+        <span class="cache-time">Финансы</span>
+      </div>
+      <div class="empty-state">
+        <div class="empty-ico">📊</div>
+        <div class="empty-title">Дашборд</div>
+        <div class="empty-sub">Скоро здесь появится статистика,<br>доходы и расходы</div>
+      </div>
     </div>
 
     <!-- ══ ВКЛАДКА 4: МЕНЮ-РЕДАКТОР ════════════════════════ -->
@@ -354,6 +391,9 @@
     <button class="tb" onclick="switchTab('shopping',this)">
       <span class="tb-ico">🛒</span><span>Закупки</span>
       <span class="tb-bdg" id="bdg-shop">0</span>
+    </button>
+    <button class="tb" onclick="switchTab('dashboard',this)">
+      <span class="tb-ico">📊</span><span>Финансы</span>
     </button>
     <button class="tb" onclick="switchTab('menu',this)">
       <span class="tb-ico">🍽</span><span>Меню</span>
