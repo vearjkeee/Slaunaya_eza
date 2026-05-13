@@ -491,3 +491,55 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
   transition:opacity .15s;
 }
 .sh-confirm-btn:active{opacity:.85}
+
+/* ══ ДАШБОРД ════════════════════════════════════════════ */
+.db-month-bar{
+  flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;
+  background:var(--bg);
+  border-bottom:0.5px solid var(--border);
+}
+.db-month-btn{
+  width:36px;height:36px;
+  border:1px solid var(--border);border-radius:var(--rad-s);
+  background:var(--bg2);color:var(--text);
+  font-size:18px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity .15s;
+}
+.db-month-btn:disabled{opacity:.3;cursor:default}
+.db-month-btn:active:not(:disabled){opacity:.7}
+.db-month-label{
+  font-size:16px;font-weight:600;color:var(--text);
+}
+
+.db-cards{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  padding:12px 12px 4px;
+}
+.db-card{
+  border-radius:var(--rad);
+  padding:12px 14px;
+  box-shadow:var(--shadow);
+}
+.db-card-label{
+  font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;
+  margin-bottom:6px;opacity:.7;
+}
+.db-card-value{
+  font-size:20px;font-weight:700;
+  line-height:1.1;margin-bottom:4px;
+}
+.db-byn{font-size:13px;font-weight:400}
+.db-card-sub{
+  font-size:11px;opacity:.65;line-height:1.4;
+}
+.db-card-main  {background:var(--blue-l);  color:var(--blue)}
+.db-card-tax   {background:var(--s-cook-l);color:var(--s-cook)}
+.db-card-exp   {background:var(--red-l);   color:var(--red)}
+.db-card-profit{background:var(--grn-l);   color:var(--grn)}
+.db-card-loss  {background:var(--red-l);   color:var(--red)}
