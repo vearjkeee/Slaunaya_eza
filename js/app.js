@@ -694,19 +694,15 @@ function toggleSpeech() {
     showToast('⚠️ Браузер не поддерживает голосовой ввод');
     return;
   }
+  if (isListening) { speechRecognition?.stop(); return; }
 
-  if (isListening) {
-    speechRecognition?.stop();
-    return;
-  }
-
-  speechRecognition = new SpeechRecognition();
-  speechRecognition.lang = 'ru-RU';
-  speechRecognition.continuous = true;
+  speechRecognition          = new SpeechRecognition();
+  speechRecognition.lang     = 'ru-RU';
+  speechRecognition.continuous     = true;
   speechRecognition.interimResults = true;
 
-  const ta  = document.getElementById('sh-text');
-  const btn = document.getElementById('sh-mic');
+  const ta       = document.getElementById('sh-text');
+  const btn      = document.getElementById('sh-mic');
   const baseText = ta.value;
 
   speechRecognition.onstart = () => {
@@ -715,54 +711,43 @@ function toggleSpeech() {
     ta.classList.add('listening');
     showToast('🎤 Говорите…');
   };
-
   speechRecognition.onresult = (e) => {
-    let interim = '';
-    let final   = '';
+    let interim = '', final = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
       if (e.results[i].isFinal) final   += e.results[i][0].transcript;
       else                       interim += e.results[i][0].transcript;
     }
     ta.value = (baseText + (baseText ? ' ' : '') + final + interim).trim();
   };
-
   speechRecognition.onend = () => {
     isListening = false;
     btn.classList.remove('on');
     ta.classList.remove('listening');
   };
-
   speechRecognition.onerror = (e) => {
     isListening = false;
     btn.classList.remove('on');
     ta.classList.remove('listening');
-    if (e.error !== 'aborted') showToast('⚠️ Ошибка распознавания: ' + e.error);
+    if (e.error !== 'aborted') showToast('⚠️ Ошибка: ' + e.error);
   };
-
   speechRecognition.start();
 }
 
-// ── Отправка текста в бот ─────────────────────────────────
+// ── Отправка текста в AI ──────────────────────────────────
 function submitShopping() {
-  // Останавливаем запись если идёт
   if (isListening) speechRecognition?.stop();
-
   const text = (document.getElementById('sh-text')?.value || '').trim();
   if (!text) { showToast('Введите или надиктуйте список'); return; }
 
-  // Проверяем есть ли уже позиции в списке
-  const hasShopping = SHOPPING && SHOPPING.length > 0;
-
-  if (hasShopping) {
-    // Показываем диалог merge/replace
+  if (SHOPPING && SHOPPING.length > 0) {
     showConfirm(
       'Список не пустой',
-      `В списке уже ${SHOPPING.length} позиций. Что сделать с новым списком?`,
+      `В списке уже ${SHOPPING.length} позиций. Что сделать с новым?`,
       'Добавить к списку',
       () => _sendShoppingToBot(text, true),
       null,
-      'Создать новый',
-      () => _sendShoppingToBot(text, false),
+      false,
+      { secondBtn: 'Создать новый', secondCb: () => _sendShoppingToBot(text, false) }
     );
   } else {
     _sendShoppingToBot(text, false);
@@ -776,24 +761,78 @@ function _sendShoppingToBot(text, merge) {
   if (twa) setTimeout(() => twa.close(), 600);
 }
 
-// ── Очистка ───────────────────────────────────────────────
-function clearBoughtShopping() {
-  const bought = (SHOPPING || []).filter(it => it.bought);
-  if (!bought.length) { showToast('Нет отмеченных позиций'); return; }
-  showConfirm(
-    'Очистить купленные',
-    `Удалить ${bought.length} отмеченных позиций?`,
-    'Удалить',
-    () => {
-      sendToBot({ action: 'shopping_clear_bought' });
-      SHOPPING = SHOPPING.filter(it => !it.bought);
-      renderShopping(SHOPPING);
-      showToast('✅ Купленные удалены');
-      if (twa) setTimeout(() => twa.close(), 600);
-    }
-  );
+// ── Отметка купленного (только локально) ─────────────────
+function toggleBought(itemId) {
+  const it = (SHOPPING || []).find(x => x.id === itemId);
+  if (!it) return;
+  it.bought = !it.bought;
+  renderShopping(SHOPPING); // перерисовываем без отправки в бот
 }
 
+// ── Подтверждение покупки ─────────────────────────────────
+function confirmShoppingPurchase() {
+  const bought = (SHOPPING || []).filter(i => i.bought);
+  if (!bought.length) return;
+
+  // Показываем диалог с полем суммы
+  _showAmountDialog(bought.length);
+}
+
+function _showAmountDialog(count) {
+  // Используем modal (он уже есть в index.html)
+  const body = document.getElementById('modal-body');
+  body.innerHTML = `
+    <div style="padding:0 4px 8px">
+      <div style="font-size:14px;color:var(--hint);margin-bottom:14px;line-height:1.5">
+        Отмечено ${count} позиций как купленные.<br>
+        Укажите сумму расходов (необязательно).
+      </div>
+      <div class="f-group" style="padding:0;margin-bottom:16px">
+        <div class="f-label">Сумма закупки (BYN)</div>
+        <input class="f-input" type="number" id="sh-amount-input"
+               placeholder="0.00" min="0" step="0.01"
+               style="margin-top:6px"/>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="closeModal()"
+          style="flex:1;height:42px;border:1px solid var(--border);border-radius:var(--rad-s);
+                 background:var(--bg2);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--text)">
+          Отмена
+        </button>
+        <button onclick="_submitConfirmedPurchase()"
+          style="flex:2;height:42px;border:none;border-radius:var(--rad-s);
+                 background:var(--grn);color:#fff;font-size:14px;font-weight:600;
+                 font-family:inherit;cursor:pointer">
+          Подтвердить
+        </button>
+      </div>
+    </div>`;
+  document.getElementById('modal-title').textContent = '✓ Покупка совершена';
+  document.getElementById('modal').classList.add('on');
+
+  // Фокус на поле суммы
+  setTimeout(() => document.getElementById('sh-amount-input')?.focus(), 200);
+}
+
+function _submitConfirmedPurchase() {
+  closeModal();
+  const amount   = parseFloat(document.getElementById('sh-amount-input')?.value || '') || null;
+  const boughtIds = (SHOPPING || []).filter(i => i.bought).map(i => i.id);
+
+  sendToBot({
+    action:     'shopping_confirm',
+    bought_ids: boughtIds,
+    amount:     amount,   // null если не указано
+  });
+
+  // Локально убираем отмеченные
+  SHOPPING = SHOPPING.filter(i => !i.bought);
+  renderShopping(SHOPPING);
+  showToast('✅ Покупка подтверждена' + (amount ? ` · ${amount} BYN` : ''));
+  if (twa) setTimeout(() => twa.close(), 1200);
+}
+
+// ── Очистка всего списка ──────────────────────────────────
 function clearAllShopping() {
   if (!SHOPPING?.length) { showToast('Список уже пустой'); return; }
   showConfirm(
@@ -807,18 +846,9 @@ function clearAllShopping() {
       showToast('🗑 Список очищен');
       if (twa) setTimeout(() => twa.close(), 600);
     },
-    null, null, null,
+    null,
     true // danger
   );
-}
-
-// ── Отметка купленного ────────────────────────────────────
-function toggleBought(itemId) {
-  const it = (SHOPPING || []).find(x => x.id === itemId);
-  if (!it) return;
-  it.bought = !it.bought;
-  sendToBot({ action: 'shopping_mark', item_id: it.id, bought: it.bought });
-  renderShopping(SHOPPING);
 }
 
 // ══════════════════════════════════════════════════════════
