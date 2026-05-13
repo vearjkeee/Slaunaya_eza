@@ -962,4 +962,182 @@ async function init() {
   setInterval(saveDraft, 10000);
 }
 
+// ══════════════════════════════════════════════════════════
+// ДАШБОРД
+// ══════════════════════════════════════════════════════════
+let dashMonth = new Date().getMonth() + 1;
+let dashYear  = new Date().getFullYear();
+
+const MONTH_NAMES = [
+  "", "Январь","Февраль","Март","Апрель","Май","Июнь",
+  "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"
+];
+
+async function loadDashboard() {
+  document.getElementById('dashboard-body').innerHTML = `
+    <div class="empty-state">
+      <div class="spin" style="width:28px;height:28px;border-width:2px"></div>
+    </div>`;
+
+  const data = await fetchDashboard(dashMonth, dashYear);
+  if (!data) {
+    document.getElementById('dashboard-body').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-ico">⚠️</div>
+        <div class="empty-title">Нет данных</div>
+        <div class="empty-sub">Проверьте подключение</div>
+      </div>`;
+    return;
+  }
+  renderDashboard(data);
+}
+
+function dashShiftMonth(delta) {
+  dashMonth += delta;
+  if (dashMonth > 12) { dashMonth = 1;  dashYear++; }
+  if (dashMonth < 1)  { dashMonth = 12; dashYear--; }
+
+  // Блокируем кнопку "вперёд" если текущий месяц
+  const now = new Date();
+  const isCurrentMonth = dashMonth === now.getMonth() + 1 && dashYear === now.getFullYear();
+  document.getElementById('db-month-next').disabled = isCurrentMonth;
+
+  document.getElementById('db-month-label').textContent =
+    MONTH_NAMES[dashMonth] + ' ' + dashYear;
+
+  loadDashboard();
+}
+
+function renderDashboard(d) {
+  // Обновляем заголовок
+  document.getElementById('db-month-label').textContent =
+    MONTH_NAMES[d.month] + ' ' + d.year;
+
+  const fmt = v => (+v || 0).toFixed(2).replace('.', ',');
+
+  let html = '';
+
+  // ── Главные цифры ──────────────────────────────────
+  html += `<div class="db-cards">
+    <div class="db-card db-card-main">
+      <div class="db-card-label">Выручка</div>
+      <div class="db-card-value">${fmt(d.revenue_total)} <span class="db-byn">BYN</span></div>
+      <div class="db-card-sub">${d.orders_count} заказ(ов)${d.revenue_extra > 0 ? ' + ' + fmt(d.revenue_extra) + ' вне бота' : ''}</div>
+    </div>
+    <div class="db-card db-card-tax">
+      <div class="db-card-label">Налог 10%</div>
+      <div class="db-card-value">${fmt(d.tax)} <span class="db-byn">BYN</span></div>
+      <div class="db-card-sub">от выручки ${fmt(d.revenue_total)}</div>
+    </div>
+    <div class="db-card db-card-exp">
+      <div class="db-card-label">Расходы</div>
+      <div class="db-card-value">${fmt(d.expenses_total)} <span class="db-byn">BYN</span></div>
+      <div class="db-card-sub">закупки ${fmt(d.expenses_shopping)}${d.expenses_other > 0 ? ' + прочее ' + fmt(d.expenses_other) : ''}</div>
+    </div>
+    <div class="db-card ${d.net_profit >= 0 ? 'db-card-profit' : 'db-card-loss'}">
+      <div class="db-card-label">Чистая прибыль</div>
+      <div class="db-card-value">${fmt(d.net_profit)} <span class="db-byn">BYN</span></div>
+      <div class="db-card-sub">выручка − налог − расходы</div>
+    </div>
+  </div>`;
+
+  // ── Форма: доход вне бота ─────────────────────────
+  html += `<div class="sec" style="margin-top:4px">
+    <div class="sec-hdr">💰 Доход вне бота</div>
+    <div class="sec-body">
+      <div class="f-group" style="padding-top:8px">
+        <div class="f-label">Сумма (BYN)</div>
+        <input class="f-input" type="number" id="db-income-amount"
+               placeholder="0.00" min="0" step="0.01" style="margin-top:6px"/>
+      </div>
+      <div class="f-group">
+        <div class="f-label">Примечание</div>
+        <input class="f-input" type="text" id="db-income-note"
+               placeholder="Наличные, перевод…" style="margin-top:6px"/>
+      </div>
+      <div style="padding:0 14px 12px">
+        <button class="sv-btn" style="margin-top:0;height:40px;font-size:14px"
+                onclick="submitFinance('income_extra')">
+          Записать доход
+        </button>
+      </div>
+    </div>
+  </div>`;
+
+  // ── Форма: прочий расход ──────────────────────────
+  html += `<div class="sec">
+    <div class="sec-hdr">💸 Прочий расход</div>
+    <div class="sec-body">
+      <div class="f-group" style="padding-top:8px">
+        <div class="f-label">Сумма (BYN)</div>
+        <input class="f-input" type="number" id="db-expense-amount"
+               placeholder="0.00" min="0" step="0.01" style="margin-top:6px"/>
+      </div>
+      <div class="f-group">
+        <div class="f-label">Примечание</div>
+        <input class="f-input" type="text" id="db-expense-note"
+               placeholder="Упаковка, транспорт…" style="margin-top:6px"/>
+      </div>
+      <div style="padding:0 14px 12px">
+        <button class="sv-btn" style="margin-top:0;height:40px;font-size:14px;background:var(--red)"
+                onclick="submitFinance('expense_other')">
+          Записать расход
+        </button>
+      </div>
+    </div>
+  </div>`;
+
+  // ── Последние записи ──────────────────────────────
+  if (d.recent_expenses && d.recent_expenses.length) {
+    html += `<div class="sec">
+      <div class="sec-hdr">Последние записи</div>
+      <div class="sec-body" style="padding:0">`;
+    d.recent_expenses.forEach(r => {
+      const isIncome = r.type === "Доход вне бота";
+      html += `<div class="row-item">
+        <div class="ri-ico">${isIncome ? '💰' : '💸'}</div>
+        <div class="ri-body">
+          <div class="ri-label">${esc(r.type)}</div>
+          <div class="ri-sub">${esc(r.date)}${r.note ? ' · ' + esc(r.note) : ''}</div>
+        </div>
+        <div class="ri-right" style="color:${isIncome ? 'var(--grn)' : 'var(--red)'}">
+          ${isIncome ? '+' : '−'}${(+r.sum || 0).toFixed(2)}
+        </div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  html += `<div style="height:16px"></div>`;
+  document.getElementById('dashboard-body').innerHTML = html;
+}
+
+function submitFinance(finType) {
+  const isIncome  = finType === 'income_extra';
+  const amountEl  = document.getElementById(isIncome ? 'db-income-amount'  : 'db-expense-amount');
+  const noteEl    = document.getElementById(isIncome ? 'db-income-note'    : 'db-expense-note');
+  const amount    = parseFloat(amountEl?.value || '') || 0;
+
+  if (!amount || amount <= 0) {
+    showToast('Укажите сумму');
+    amountEl?.focus();
+    return;
+  }
+
+  const note = noteEl?.value?.trim() || '';
+
+  showConfirm(
+    isIncome ? 'Записать доход' : 'Записать расход',
+    `${isIncome ? 'Доход' : 'Расход'}: ${amount.toFixed(2)} BYN${note ? '\n' + note : ''}`,
+    'Записать',
+    () => {
+      sendToBot({ action: 'add_finance', fin_type: finType, amount, note });
+      amountEl.value = '';
+      if (noteEl) noteEl.value = '';
+      showToast(isIncome ? '💰 Доход записан' : '💸 Расход записан');
+      if (twa) setTimeout(() => twa.close(), 800);
+    }
+  );
+}
+
 init();
