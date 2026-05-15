@@ -564,8 +564,9 @@ function renderCartFull() {
   </div>` +
   keys.map(k => {
     const it = cart[k];
-    return `<div class="ci" id="ci-${k}">
+    return `<div class="ci" id="ci-${k}" draggable="false" data-key="${k}">
       <div class="ci-top">
+        <div class="ci-drag" title="Перетащить">⠿</div>
         <div class="ci-name">${esc(it.d.name)}${it.manual?'<br><span style="font-size:11px;color:var(--hint)">вручную</span>':''}</div>
         <button class="ci-del" onclick="removeFromCart('${k}')">✕</button>
       </div>
@@ -587,6 +588,98 @@ function renderCartFull() {
   }).join('');
 
   updCart();
+  _attachCartDrag();
+}
+
+function _attachCartDrag() {
+  const container = document.getElementById('cart-items');
+  let dragEl   = null;   // перетаскиваемый элемент
+  let ghostEl  = null;   // полупрозрачная копия
+  let startY   = 0;
+  let offsetY  = 0;      // смещение касания внутри элемента
+  let dragKey  = null;
+
+  // Только ручка drag инициирует перетаскивание
+  container.querySelectorAll('.ci-drag').forEach(handle => {
+    handle.addEventListener('touchstart', e => {
+      const ci = handle.closest('.ci');
+      if (!ci) return;
+      dragKey = ci.dataset.key;
+      dragEl  = ci;
+
+      const rect  = ci.getBoundingClientRect();
+      startY  = e.touches[0].clientY;
+      offsetY = startY - rect.top;
+
+      // Создаём ghost
+      ghostEl = ci.cloneNode(true);
+      ghostEl.style.cssText = `
+        position:fixed; left:${rect.left}px; top:${rect.top}px;
+        width:${rect.width}px; opacity:0.85; z-index:9999;
+        pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,0.18);
+        border-radius:var(--rad); background:var(--bg);
+        transition:none;
+      `;
+      document.body.appendChild(ghostEl);
+
+      ci.style.opacity = '0.3';
+      e.preventDefault();
+    }, { passive: false });
+  });
+
+  document.addEventListener('touchmove', e => {
+    if (!dragEl || !ghostEl) return;
+    e.preventDefault();
+
+    const y = e.touches[0].clientY;
+    ghostEl.style.top = (y - offsetY) + 'px';
+
+    // Находим элемент под пальцем
+    ghostEl.style.display = 'none';
+    const elBelow = document.elementFromPoint(e.touches[0].clientX, y);
+    ghostEl.style.display = '';
+
+    const targetCi = elBelow?.closest('.ci[data-key]');
+    if (targetCi && targetCi !== dragEl) {
+      // Вставляем dragEl перед или после target в зависимости от позиции
+      const targetRect = targetCi.getBoundingClientRect();
+      const mid        = targetRect.top + targetRect.height / 2;
+      if (y < mid) {
+        container.insertBefore(dragEl, targetCi);
+      } else {
+        container.insertBefore(dragEl, targetCi.nextSibling);
+      }
+      // Синхронизируем cart с новым DOM-порядком
+      _syncCartOrderFromDOM(container);
+    }
+  }, { passive: false });
+
+  const _endDrag = () => {
+    if (!dragEl) return;
+    dragEl.style.opacity = '';
+    ghostEl?.remove();
+    ghostEl = null;
+    dragEl  = null;
+    dragKey = null;
+    saveDraft();
+    updCart();
+  };
+
+  document.addEventListener('touchend',    _endDrag, { once: false });
+  document.addEventListener('touchcancel', _endDrag, { once: false });
+}
+
+function _syncCartOrderFromDOM(container) {
+  // Читаем порядок key из DOM и перестраиваем cart как новый объект
+  const keys = [...container.querySelectorAll('.ci[data-key]')]
+    .map(el => el.dataset.key)
+    .filter(k => cart[k]);
+
+  const newCart = {};
+  keys.forEach(k => { newCart[k] = cart[k]; });
+  // Добавляем ключи которых нет в DOM (на случай рассинхрона)
+  Object.keys(cart).forEach(k => { if (!newCart[k]) newCart[k] = cart[k]; });
+  cart = newCart;
 }
 
 function removeFromCart(id) {
