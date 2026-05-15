@@ -543,3 +543,17 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 .db-card-exp   {background:var(--red-l);   color:var(--red)}
 .db-card-profit{background:var(--grn-l);   color:var(--grn)}
 .db-card-loss  {background:var(--red-l);   color:var(--red)}
+
+* ══ КОРЗИНА — РУЧКА DRAG ═══════════════════════════════ */
+.ci-drag{
+  width:20px;
+  flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--hint);
+  font-size:16px;
+  cursor:grab;
+  touch-action:none;
+  padding-right:4px;
+  user-select:none;
+}
+.ci-drag:active{cursor:grabbing}
