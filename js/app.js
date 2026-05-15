@@ -17,6 +17,7 @@ let MENU    = [], CLIENTS = [];
 let ACTIVE_ORDERS = [], ARCHIVE_ORDERS = [], SHOPPING = [];
 
 let cart       = {};
+let cartOrder  = [];
 let delivType  = 'Самовывоз';
 let prepay     = true;
 let manualId   = 1000;
@@ -49,6 +50,7 @@ function saveDraft() {
     discount:  document.getElementById('c-discount')?.value || '',
     note:      document.getElementById('c-note')?.value    || '',
     cart,
+    cartOrder,
     editingRow,
     ts: Date.now(),
   };
@@ -77,6 +79,7 @@ function applyDraft(d) {
   setDeliv(d.delivType || 'Самовывоз', null, true);
   setPay(!!d.prepay, null, true);
   cart       = d.cart       || {};
+  cartOrder = d.cartOrder || Object.keys(d.cart || {});
   editingRow = d.editingRow || null;
 }
 
@@ -295,6 +298,7 @@ function duplicateOrder(row) {
   // 2. Теперь заполняем данные
   editingRow = null;
   cart = {};
+  cartOrder = [];
   (order.dishes ||[]).forEach((d, i) => {
     const menuDish = MENU.find(m => m.name === d.name);
     const id = menuDish ? String(menuDish.id) : ('dup' + i);
@@ -304,6 +308,7 @@ function duplicateOrder(row) {
       p: +d.price || 0,
       manual: !menuDish,
     };
+    cartOrder.push(id);
   });
 
   document.getElementById('o-client').value  = order.client || '';
@@ -313,6 +318,7 @@ function duplicateOrder(row) {
   setDeliv(order.delivery_type || 'Самовывоз', null, true);
   document.getElementById('o-addr').value   = order.address  || '';
   document.getElementById('o-dcost').value  = order.delivery || '';
+  document.getElementById('c-note').value   = order.note     || '';
   setPay(!!order.prepayment, null, true);
 
   // 3. Сохраняем это как новый черновик
@@ -335,9 +341,11 @@ function openEditOrder() {
   setDeliv(order.delivery_type || 'Самовывоз', null, true);
   document.getElementById('o-addr').value   = order.address  || '';
   document.getElementById('o-dcost').value  = order.delivery || '';
+  document.getElementById('c-note').value   = order.note     || '';
   setPay(!!order.prepayment, null, true);
 
   cart = {};
+  cartOrder = [];
   const dishes = order.dishes || [];
   if (dishes.length) {
     dishes.forEach((d, i) => {
@@ -349,6 +357,7 @@ function openEditOrder() {
         p: +d.price || 0,
         manual: !menuDish,
       };
+      cartOrder.push(id);
     });
     showToast('Редактирование #' + order.row + ' · ' + dishes.length + ' блюд');
   } else {
@@ -364,6 +373,7 @@ function openEditOrder() {
 function initNewOrder() {
   editingRow = null;
   cart = {};
+  cartOrder = [];
   ['o-client','o-contact','o-date','o-time','o-addr','o-dcost'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -498,7 +508,10 @@ function filterMenu() {
 function addToCart(id) {
   const d = MENU.find(m => String(m.id) === id);
   if (!d) return;
-  if (!cart[id]) cart[id] = { d:{id,name:d.name,cat:d.cat||''}, q:0, p:+d.price||0 };
+  if (!cart[id]) {
+    cart[id] = { d:{id,name:d.name,cat:d.cat||''}, q:0, p:+d.price||0 };
+    cartOrder.push(id);
+  }
   cart[id].q++;
   saveDraft(); updCart(); filterMenu();
 }
@@ -506,7 +519,10 @@ function addToCart(id) {
 function chQ(id, delta) {
   if (!cart[id]) return;
   cart[id].q += delta;
-  if (cart[id].q <= 0) delete cart[id];
+  if (cart[id].q <= 0) { 
+    delete cart[id]; 
+    cartOrder = cartOrder.filter(k => k !== id);
+  }
   saveDraft(); updCart(); filterMenu();
 }
 
@@ -680,10 +696,12 @@ function _syncCartOrderFromDOM(container) {
   // Добавляем ключи которых нет в DOM (на случай рассинхрона)
   Object.keys(cart).forEach(k => { if (!newCart[k]) newCart[k] = cart[k]; });
   cart = newCart;
+  cartOrder = keys;
 }
 
 function removeFromCart(id) {
   delete cart[id];
+  cartOrder = cartOrder.filter(k => k !== id);
   saveDraft(); renderCartFull();
 }
 
@@ -735,30 +753,25 @@ function updCart() {
 // СОХРАНЕНИЕ ЗАКАЗА
 // ══════════════════════════════════════════════════════════
 function saveOrder() {
-  const client  = document.getElementById('o-client').value.trim();
-  const dateVal = document.getElementById('o-date').value; // Формат YYYY-MM-DD
-  
-  if (!client)  { showToast('Укажите клиента'); return; }
-  if (!dateVal) { showToast('Укажите корректную дату'); return; }
+  const client = document.getElementById('o-client').value.trim();
+  const date   = document.getElementById('o-date').value; // Формат YYYY-MM-DD
+  const keys   = cartOrder.length ? cartOrder : Object.keys(cart);
 
-  // 1. Проверка на прошедшую дату
-  const selectedDate = new Date(dateVal);
-  selectedDate.setHours(0, 0, 0, 0);
-  const today = new Date();
+  if (!client)      { showToast('Укажите клиента'); return; }
+  if (!date)        { showToast('Укажите дату'); return; }
+  if (!keys.length) { showToast('Корзина пуста'); return; }
+
+  // Валидация даты
+  const selectedDate = new Date(date);
+  const today        = new Date();
   today.setHours(0, 0, 0, 0);
 
-  if (selectedDate < today) {
-    showToast('Дата доставки не может быть в прошлом!');
-    return;
+  if (isNaN(selectedDate.getTime())) {
+    showToast('Неверный формат даты'); return;
   }
-
-  // 2. Берем порядок блюд прямо с экрана, а не из объекта, чтобы не сбился D&D
-  const domNodes = document.querySelectorAll('#cart-items .ci[data-key]');
-  const keys = domNodes.length > 0 
-    ? Array.from(domNodes).map(el => el.dataset.key) 
-    : Object.keys(cart);
-
-  if (!keys.length) { showToast('Корзина пуста'); return; }
+  if (!editingRow && selectedDate < today) {
+    showToast('❌ Дата не может быть в прошлом'); return;
+  }
 
   const dcost = delivType === 'Доставка' ? (parseFloat(document.getElementById('o-dcost').value) || 0) : 0;
   const disc  = parseFloat(document.getElementById('c-discount')?.value || 0) || 0;
@@ -776,7 +789,7 @@ function saveOrder() {
     prepayment:       prepay,
     discount_percent: disc,
     note:             document.getElementById('c-note')?.value || '',
-    dishes:           keys.map(k => ({
+    dishes:           keys.filter(k => cart[k]).map(k => ({
       name:  cart[k].d.name,
       qty:   cart[k].q,
       price: cart[k].p,
