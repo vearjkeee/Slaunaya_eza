@@ -735,11 +735,29 @@ function updCart() {
 // СОХРАНЕНИЕ ЗАКАЗА
 // ══════════════════════════════════════════════════════════
 function saveOrder() {
-  const client = document.getElementById('o-client').value.trim();
-  const date   = document.getElementById('o-date').value;
-  const keys   = Object.keys(cart);
-  if (!client)      { showToast('Укажите клиента'); return; }
-  if (!date)        { showToast('Укажите дату'); return; }
+  const client  = document.getElementById('o-client').value.trim();
+  const dateVal = document.getElementById('o-date').value; // Формат YYYY-MM-DD
+  
+  if (!client)  { showToast('Укажите клиента'); return; }
+  if (!dateVal) { showToast('Укажите корректную дату'); return; }
+
+  // 1. Проверка на прошедшую дату
+  const selectedDate = new Date(dateVal);
+  selectedDate.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (selectedDate < today) {
+    showToast('Дата доставки не может быть в прошлом!');
+    return;
+  }
+
+  // 2. Берем порядок блюд прямо с экрана, а не из объекта, чтобы не сбился D&D
+  const domNodes = document.querySelectorAll('#cart-items .ci[data-key]');
+  const keys = domNodes.length > 0 
+    ? Array.from(domNodes).map(el => el.dataset.key) 
+    : Object.keys(cart);
+
   if (!keys.length) { showToast('Корзина пуста'); return; }
 
   const dcost = delivType === 'Доставка' ? (parseFloat(document.getElementById('o-dcost').value) || 0) : 0;
@@ -750,7 +768,7 @@ function saveOrder() {
     order_row:        editingRow || undefined,
     client,
     contact:          document.getElementById('o-contact').value || '',
-    event_date:       date.split('-').reverse().join('.'),
+    event_date:       dateVal.split('-').reverse().join('.'), // Переворачиваем для бота
     event_time:       document.getElementById('o-time').value || '',
     delivery_type:    delivType,
     address:          delivType === 'Доставка' ? (document.getElementById('o-addr').value || '') : '',
@@ -770,7 +788,7 @@ function saveOrder() {
   sendToBot(payload);
   clearDraft();
   showToast(editingRow ? '✓ Заказ обновлён' : '✓ Заказ создан');
-  if (twa) setTimeout(() => twa.close(), 800);
+  if (window.twa) setTimeout(() => window.twa.close(), 800);
 }
 
 // ══════════════════════════════════════════════════════════
