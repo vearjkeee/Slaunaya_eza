@@ -233,7 +233,7 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 /* ══ КОРЗИНА ════════════════════════════════════════════ */
 .cart-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--hint);padding:40px}
 .ci{padding:11px 14px;border-bottom:0.5px solid var(--border);background:var(--bg)}
-.ci-top{display:flex;align-items:start;gap:8px}
+.ci-top{display:flex;align-items:center;padding:11px 14px 6px;gap:6px}
 .ci-name{flex:1;font-size:14px;color:var(--text);line-height:1.3}
 .ci-del{border:none;background:transparent;color:var(--hint);font-size:18px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;padding-top:1px}
 .ci-bot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;flex-wrap:wrap;gap:8px}
