@@ -535,6 +535,7 @@ function addManual() {
   if (price <= 0) { showToast('Укажите цену'); return; }
   const id = 'm' + (manualId++);
   cart[id] = { d:{id,name,cat:'Вручную'}, q:qty, p:price, manual:true };
+  cartOrder.push(id);
   document.getElementById('m-name').value  = '';
   document.getElementById('m-price').value = '';
   document.getElementById('m-qty').value   = '';
