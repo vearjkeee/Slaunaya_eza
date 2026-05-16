@@ -781,7 +781,7 @@ function saveOrder() {
     order_row:        editingRow || undefined,
     client,
     contact:          document.getElementById('o-contact').value || '',
-    event_date:       dateVal.split('-').reverse().join('.'), // Переворачиваем для бота
+    event_date:       date.split('-').reverse().join('.'),
     event_time:       document.getElementById('o-time').value || '',
     delivery_type:    delivType,
     address:          delivType === 'Доставка' ? (document.getElementById('o-addr').value || '') : '',
