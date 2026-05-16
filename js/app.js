@@ -306,7 +306,7 @@ function duplicateOrder(row) {
       d: { id, name: d.name, cat: menuDish?.cat || '' },
       q: +d.qty || 1,
       p: +d.price || 0,
-      unit: d.unit || menuDish?.unit || 'порц.',
+      unit: d.unit || menuDish?.unit || (!menuDish ? 'шт' : 'порц.'),
       manual: !menuDish,
     };
     cartOrder.push(id);
@@ -356,7 +356,7 @@ function openEditOrder() {
         d: { id, name: d.name, cat: menuDish?.cat || '' },
         q: +d.qty || 1,
         p: +d.price || 0,
-        unit: d.unit || menuDish?.unit || 'порц.',
+        unit: d.unit || menuDish?.unit || (!menuDish ? 'шт' : 'порц.'),
         manual: !menuDish,
       };
       cartOrder.push(id);
