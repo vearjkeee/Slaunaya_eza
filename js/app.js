@@ -344,6 +344,7 @@ function openEditOrder() {
   document.getElementById('o-dcost').value  = order.delivery || '';
   document.getElementById('c-note').value   = order.note     || '';
   setPay(!!order.prepayment, null, true);
+  document.getElementById('cart-items').innerHTML = `<input type="hidden" id="c-discount" value="${order.discount_percent || 0}">`;
 
   cart = {};
   cartOrder = [];
