@@ -306,6 +306,7 @@ function duplicateOrder(row) {
       d: { id, name: d.name, cat: menuDish?.cat || '' },
       q: +d.qty || 1,
       p: +d.price || 0,
+      unit: d.unit || menuDish?.unit || 'порц.',
       manual: !menuDish,
     };
     cartOrder.push(id);
@@ -355,6 +356,7 @@ function openEditOrder() {
         d: { id, name: d.name, cat: menuDish?.cat || '' },
         q: +d.qty || 1,
         p: +d.price || 0,
+        unit: d.unit || menuDish?.unit || 'порц.',
         manual: !menuDish,
       };
       cartOrder.push(id);
@@ -508,10 +510,12 @@ function filterMenu() {
 function addToCart(id) {
   const d = MENU.find(m => String(m.id) === id);
   if (!d) return;
-  if (!cart[id]) {
-    cart[id] = { d:{id,name:d.name,cat:d.cat||''}, q:0, p:+d.price||0 };
-    cartOrder.push(id);
-  }
+  if (!cart[id]) cart[id] = {
+    d: {id, name:d.name, cat:d.cat||''},
+    q: 0,
+    p: +d.price||0,
+    unit: d.unit || 'порц.',   // ← добавить
+  };
   cart[id].q++;
   saveDraft(); updCart(); filterMenu();
 }
@@ -534,7 +538,7 @@ function addManual() {
   if (!name)    { showToast('Укажите название'); return; }
   if (price <= 0) { showToast('Укажите цену'); return; }
   const id = 'm' + (manualId++);
-  cart[id] = { d:{id,name,cat:'Вручную'}, q:qty, p:price, manual:true };
+  cart[id] = { d:{id,name,cat:'Вручную'}, q:qty, p:price, manual:true, unit:'шт' };
   cartOrder.push(id);
   document.getElementById('m-name').value  = '';
   document.getElementById('m-price').value = '';
@@ -795,7 +799,7 @@ function saveOrder() {
       qty:   cart[k].q,
       price: cart[k].p,
       cost:  0,
-      unit:  'порц.',
+      unit:  cart[k].unit || 'порц.',
     })),
   };
 
