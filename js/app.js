@@ -28,12 +28,16 @@ let currentTab       = 'orders';
 let orderTab         = 'active';
 let currentOrderRow  = null;
 let editingDishId    = null;
+let draftDiscount    = 0;
+let forceNewOrder    = false;
+let isFinSubmitting  = false;
 let searchQuery      = '';
 let menuEditQuery    = '';
 let menuEditCat      = 'Все';
 
 // ── Черновик ────────────────────────────────────────────
 const DRAFT_KEY = 'order_draft_v1';
+const SHOPPING_BOUGHT_KEY = 'shopping_bought_v1';
 
 function saveDraft() {
   const client = document.getElementById('o-client')?.value || '';
@@ -47,7 +51,7 @@ function saveDraft() {
     addr:      document.getElementById('o-addr')?.value    || '',
     dcost:     document.getElementById('o-dcost')?.value   || '',
     prepay,
-    discount:  document.getElementById('c-discount')?.value || '',
+    discount:  draftDiscount,
     note:      document.getElementById('c-note')?.value    || '',
     cart,
     cartOrder,
@@ -70,6 +74,7 @@ function clearDraft() {
 
 function applyDraft(d) {
   if (!d) return;
+  draftDiscount = (+d.discount || 0);
   document.getElementById('o-client').value  = d.client  || '';
   document.getElementById('o-contact').value = d.contact || '';
   document.getElementById('o-date').value    = d.date    || '';
@@ -95,6 +100,11 @@ async function loadCache(force = false) {
   ACTIVE_ORDERS  = result.data.active_orders  || [];
   ARCHIVE_ORDERS = result.data.archive_orders || [];
   SHOPPING       = result.data.shopping_list  || [];
+  // Применяем локальные bought-флаги
+  const boughtMap = JSON.parse(localStorage.getItem(SHOPPING_BOUGHT_KEY) || '{}');
+  SHOPPING.forEach(it => {
+    if (boughtMap[it.id] !== undefined) it.bought = boughtMap[it.id];
+  });
 
   const upd   = result.data.updated || '';
   const label = (upd ? 'Обновлено: ' + upd : '') + sourceLabel(result.source);
@@ -130,13 +140,20 @@ function switchTab(tab, btn) {
   el.classList.add('on');
 
   if (tab === 'new') {
+    if (forceNewOrder) {
+      forceNewOrder = false;
+      clearDraft();
+      initNewOrder();
+      renderCurrentTab();
+      return;
+    }
     const draft = loadDraft();
     if (draft && (draft.client || Object.keys(draft.cart || {}).length > 0)) {
       showConfirm(
         'Незавершённый заказ',
         `Продолжить оформление заказа${draft.client ? ' для ' + draft.client : ''}?`,
         'Продолжить',
-        () => { applyDraft(draft); renderCurrentTab(); },
+        () => { initNewOrder(); applyDraft(draft); renderCurrentTab(); },
         () => { clearDraft(); initNewOrder(); }
       );
       return;
@@ -165,7 +182,16 @@ function goBack() {
   if (cur) { cur.classList.remove('on'); cur.style.transform = 'translateX(100%)'; }
   const prevEl = document.getElementById(prev);
   prevEl.classList.remove('back');
+  prevEl.style.transform = '';
   prevEl.classList.add('on');
+
+  // Перерисовка контента при возврате
+  if (prev === 's-catalog') filterMenu();
+  if (prev === 's-cart') renderCartFull();
+  if (prev === 's-order-detail' && currentOrderRow) {
+    const order = findOrder(currentOrderRow);
+    if (order) renderOrderDetail(order, ACTIVE_ORDERS.some(o => o.row == currentOrderRow));
+  }
 }
 
 function renderCurrentTab() {
@@ -290,8 +316,7 @@ function duplicateOrder(row) {
   const order = findOrder(row);
   if (!order) return;
 
-  // 1. Сначала переключаем вкладку (это вызовет очистку или вопрос про старый драфт,
-  // но мы это проигнорируем, так как дальше принудительно перезапишем форму)
+  forceNewOrder = true;
   const newBtn = document.querySelector('.tb:nth-child(2)');
   switchTab('new', newBtn);
 
@@ -344,7 +369,7 @@ function openEditOrder() {
   document.getElementById('o-dcost').value  = order.delivery || '';
   document.getElementById('c-note').value   = order.note     || '';
   setPay(!!order.prepayment, null, true);
-  document.getElementById('cart-items').innerHTML = `<input type="hidden" id="c-discount" value="${order.discount_percent || 0}">`;
+  draftDiscount = (+order.discount_percent || 0);
 
   cart = {};
   cartOrder = [];
@@ -581,12 +606,12 @@ function renderCartFull() {
   if (noteW) noteW.style.display = 'block';
   sv.disabled = false;
 
-  const discount = parseFloat(document.getElementById('c-discount')?.value || 0) || 0;
+  const discount = draftDiscount;
 
   items.innerHTML = `<div class="discount-wrap">
     <span class="dw-l">Скидка</span>
     <input class="dw-inp" type="number" id="c-discount" value="${discount||''}"
-      placeholder="0" min="0" max="100" step="1" oninput="updCart();saveDraft()"/>
+      placeholder="0" min="0" max="100" step="1" oninput="draftDiscount=parseFloat(this.value)||0;updCart();saveDraft()"/>
     <span class="dw-pct">%</span>
   </div>` +
   keys.map(k => {
@@ -620,16 +645,20 @@ function renderCartFull() {
 
 function _attachCartDrag() {
   const container = document.getElementById('cart-items');
+  if (!container || container._dragAttached) return;
+  container._dragAttached = true;
+
   let dragEl   = null;   // перетаскиваемый элемент
   let ghostEl  = null;   // полупрозрачная копия
   let startY   = 0;
   let offsetY  = 0;      // смещение касания внутри элемента
   let dragKey  = null;
 
-  // Только ручка drag инициирует перетаскивание
-  container.querySelectorAll('.ci-drag').forEach(handle => {
-    handle.addEventListener('touchstart', e => {
-      const ci = handle.closest('.ci');
+  // Делегирование: только ручка drag инициирует перетаскивание
+  container.addEventListener('touchstart', e => {
+    const handle = e.target.closest('.ci-drag');
+    if (!handle) return;
+    const ci = handle.closest('.ci');
       if (!ci) return;
       dragKey = ci.dataset.key;
       dragEl  = ci;
@@ -697,17 +726,15 @@ function _attachCartDrag() {
 }
 
 function _syncCartOrderFromDOM(container) {
-  // Читаем порядок key из DOM и перестраиваем cart как новый объект
-  const keys = [...container.querySelectorAll('.ci[data-key]')]
+  const domKeys = [...container.querySelectorAll('.ci[data-key]')]
     .map(el => el.dataset.key)
     .filter(k => cart[k]);
 
-  const newCart = {};
-  keys.forEach(k => { newCart[k] = cart[k]; });
-  // Добавляем ключи которых нет в DOM (на случай рассинхрона)
-  Object.keys(cart).forEach(k => { if (!newCart[k]) newCart[k] = cart[k]; });
-  cart = newCart;
-  cartOrder = keys;
+  cartOrder = domKeys;
+  // Добавляем ключи которых нет в DOM в конец (на случай рассинхрона)
+  Object.keys(cart).forEach(k => {
+    if (!cartOrder.includes(k)) cartOrder.push(k);
+  });
 }
 
 function removeFromCart(id) {
@@ -744,7 +771,7 @@ function updCart() {
   const keys  = Object.keys(cart);
   const qty   = keys.reduce((s, k) => s + cart[k].q, 0);
   const sub   = keys.reduce((s, k) => s + cart[k].q * cart[k].p, 0);
-  const disc  = parseFloat(document.getElementById('c-discount')?.value || 0) || 0;
+  const disc = draftDiscount;
   const discA = sub * disc / 100;
   const deliv = delivType === 'Доставка' ? (parseFloat(document.getElementById('o-dcost')?.value) || 0) : 0;
   const total = sub - discA + deliv;
@@ -779,8 +806,10 @@ function saveOrder() {
   if (!keys.length) { showToast('Корзина пуста'); return; }
 
   // Валидация даты
-  const selectedDate = new Date(date);
-  const today        = new Date();
+  const [yy, mm, dd] = date.split('-').map(Number);
+  const selectedDate = new Date(yy, mm - 1, dd);
+  selectedDate.setHours(0, 0, 0, 0);
+  const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   if (isNaN(selectedDate.getTime())) {
@@ -791,7 +820,7 @@ function saveOrder() {
   }
 
   const dcost = delivType === 'Доставка' ? (parseFloat(document.getElementById('o-dcost').value) || 0) : 0;
-  const disc  = parseFloat(document.getElementById('c-discount')?.value || 0) || 0;
+  const disc = draftDiscount;
 
   const payload = {
     action:           editingRow ? 'edit_order' : 'create_order',
@@ -907,6 +936,12 @@ function toggleBought(itemId) {
   const it = (SHOPPING || []).find(x => x.id === itemId);
   if (!it) return;
   it.bought = !it.bought;
+
+  // Сохраняем состояние bought в localStorage
+  const boughtMap = JSON.parse(localStorage.getItem(SHOPPING_BOUGHT_KEY) || '{}');
+  boughtMap[itemId] = it.bought;
+  localStorage.setItem(SHOPPING_BOUGHT_KEY, JSON.stringify(boughtMap));
+
   renderShopping(SHOPPING); // перерисовываем без отправки в бот
 }
 
@@ -960,6 +995,11 @@ function _submitConfirmedPurchase() {
   const amount   = parseFloat(document.getElementById('sh-amount-input')?.value || '') || null;
   const boughtIds = (SHOPPING || []).filter(i => i.bought).map(i => i.id);
 
+  // Удаляем подтверждённые из localStorage
+  const boughtMap = JSON.parse(localStorage.getItem(SHOPPING_BOUGHT_KEY) || '{}');
+  boughtIds.forEach(id => delete boughtMap[id]);
+  localStorage.setItem(SHOPPING_BOUGHT_KEY, JSON.stringify(boughtMap));
+
   sendToBot({
     action:     'shopping_confirm',
     bought_ids: boughtIds,
@@ -983,6 +1023,7 @@ function clearAllShopping() {
     () => {
       sendToBot({ action: 'shopping_clear_all' });
       SHOPPING = [];
+      localStorage.removeItem(SHOPPING_BOUGHT_KEY);
       renderShopping(SHOPPING);
       showToast('🗑 Список очищен');
       if (twa) setTimeout(() => twa.close(), 600);
@@ -1041,9 +1082,8 @@ function saveDishEdit() {
   if (editingDishId) {
     const d = MENU.find(m => String(m.id) === String(editingDishId));
     if (d) { d.name=name; d.cat=cat; d.price=price; d.cost=cost; d.unit=unit; }
-  } else {
-    MENU.push({ id:'new_'+Date.now(), name, cat, price, cost, unit });
   }
+  // При создании не добавляем локально — ждём обновления от бота
 
   showToast(editingDishId ? '✓ Блюдо обновлено' : '✓ Блюдо добавлено');
   goBack();
@@ -1258,6 +1298,7 @@ function renderDashboard(d) {
 }
 
 function submitFinance(finType) {
+  if (isFinSubmitting) return;
   const isIncome  = finType === 'income_extra';
   const amountEl  = document.getElementById(isIncome ? 'db-income-amount'  : 'db-expense-amount');
   const noteEl    = document.getElementById(isIncome ? 'db-income-note'    : 'db-expense-note');
@@ -1276,10 +1317,12 @@ function submitFinance(finType) {
     `${isIncome ? 'Доход' : 'Расход'}: ${amount.toFixed(2)} BYN${note ? '\n' + note : ''}`,
     'Записать',
     () => {
+      isFinSubmitting = true;
       sendToBot({ action: 'add_finance', fin_type: finType, amount, note });
       amountEl.value = '';
       if (noteEl) noteEl.value = '';
       showToast(isIncome ? '💰 Доход записан' : '💸 Расход записан');
+      setTimeout(() => { isFinSubmitting = false; }, 2000);
       if (twa) setTimeout(() => twa.close(), 800);
     }
   );
