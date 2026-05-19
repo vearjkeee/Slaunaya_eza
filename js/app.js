@@ -511,12 +511,17 @@ function filterMenu() {
 function addToCart(id) {
   const d = MENU.find(m => String(m.id) === id);
   if (!d) return;
-  if (!cart[id]) cart[id] = {
-    d: {id, name:d.name, cat:d.cat||''},
-    q: 0,
-    p: +d.price||0,
-    unit: d.unit || 'порц.',   // ← добавить
-  };
+  
+  if (!cart[id]) {
+    cart[id] = {
+      d: {id, name:d.name, cat:d.cat||''},
+      q: 0,
+      p: +d.price||0,
+      unit: d.unit || 'порц.',
+    };
+    cartOrder.push(id);
+  }
+  
   cart[id].q++;
   saveDraft(); updCart(); filterMenu();
 }
