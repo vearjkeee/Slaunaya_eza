@@ -557,3 +557,6 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
   user-select:none;
 }
 .ci-drag:active{cursor:grabbing}
+
+.sh-unrec { background:rgba(255,193,7,.08) !important; border-left:3px solid #ffc107; }
+.sh-raw   { font-size:11px; color:var(--hint); font-style:italic; margin-top:2px; }
