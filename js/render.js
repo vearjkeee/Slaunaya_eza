@@ -448,10 +448,12 @@ function renderShopping(shopping) {
 }
 
 function shoppingItemHTML(it) {
-  return `<div class="sh-item" onclick="toggleBought('${esc(it.id)}')">
+  const isUnrec = it.category === 'Нераспознанное';
+  return `<div class="sh-item${isUnrec ? ' sh-unrec' : ''}" onclick="toggleBought('${esc(it.id)}')">
     <div class="sh-chk${it.bought ? ' on' : ''}"></div>
     <div class="sh-body">
       <div class="sh-name${it.bought ? ' done' : ''}">${esc(it.name)}</div>
+      ${it.raw && it.raw !== it.name ? `<div class="sh-raw">${esc(it.raw)}</div>` : ''}
       <div class="sh-qty">${fmtQty(it.qty)} ${esc(it.unit || '')}</div>
     </div>
   </div>`;
