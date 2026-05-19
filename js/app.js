@@ -562,7 +562,7 @@ function goToCart() {
 }
 
 function renderCartFull() {
-  const keys  = Object.keys(cart);
+  const keys = cartOrder.length ? cartOrder.filter(k => cart[k]) : Object.keys(cart);
   const empty = document.getElementById('cart-empty');
   const items = document.getElementById('cart-items');
   const noteW = document.getElementById('cart-note-wrap');
@@ -719,7 +719,13 @@ function removeFromCart(id) {
 function chCartQ(id, d) {
   if (!cart[id]) return;
   cart[id].q += d;
-  if (cart[id].q <= 0) { delete cart[id]; saveDraft(); renderCartFull(); return; }
+  if (cart[id].q <= 0) { 
+    delete cart[id]; 
+    cartOrder = cartOrder.filter(k => k !== id); // <--- Добавить это
+    saveDraft(); 
+    renderCartFull(); 
+    return; 
+  }
   document.querySelector(`#ci-${CSS.escape(id)} .qv`).textContent = cart[id].q;
   const t = document.getElementById('cit-' + id);
   if (t) t.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
