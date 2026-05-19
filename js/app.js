@@ -659,29 +659,29 @@ function _attachCartDrag() {
     const handle = e.target.closest('.ci-drag');
     if (!handle) return;
     const ci = handle.closest('.ci');
-      if (!ci) return;
-      dragKey = ci.dataset.key;
-      dragEl  = ci;
+    if (!ci) return; // <-- (Кстати, тут у вас был лишний отступ в коде, я поправил)
+    
+    dragKey = ci.dataset.key;
+    dragEl  = ci;
 
-      const rect  = ci.getBoundingClientRect();
-      startY  = e.touches[0].clientY;
-      offsetY = startY - rect.top;
+    const rect  = ci.getBoundingClientRect();
+    startY  = e.touches[0].clientY;
+    offsetY = startY - rect.top;
 
-      // Создаём ghost
-      ghostEl = ci.cloneNode(true);
-      ghostEl.style.cssText = `
-        position:fixed; left:${rect.left}px; top:${rect.top}px;
-        width:${rect.width}px; opacity:0.85; z-index:9999;
-        pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,0.18);
-        border-radius:var(--rad); background:var(--bg);
-        transition:none;
-      `;
-      document.body.appendChild(ghostEl);
+    // Создаём ghost
+    ghostEl = ci.cloneNode(true);
+    ghostEl.style.cssText = `
+      position:fixed; left:${rect.left}px; top:${rect.top}px;
+      width:${rect.width}px; opacity:0.85; z-index:9999;
+      pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,0.18);
+      border-radius:var(--rad); background:var(--bg);
+      transition:none;
+    `;
+    document.body.appendChild(ghostEl);
 
-      ci.style.opacity = '0.3';
-      e.preventDefault();
-    }, { passive: false });
-  });
+    ci.style.opacity = '0.3';
+    e.preventDefault();
+  }, { passive: false }); // <-- Теперь тут всё правильно закрывается
 
   document.addEventListener('touchmove', e => {
     if (!dragEl || !ghostEl) return;
