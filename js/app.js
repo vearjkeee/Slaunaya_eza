@@ -170,6 +170,18 @@ function updateAllBadges() {
   }
 }
 
+function showLoadingOverlay(text = "Загрузка...") {
+  const l = document.getElementById('loader');
+  const t = l.querySelector('.load-text');
+  if (t) t.textContent = text;
+  l.style.display = 'flex';
+}
+
+function hideLoadingOverlay() {
+  const l = document.getElementById('loader');
+  l.style.display = 'none';
+}
+
 // ── Черновик ────────────────────────────────────────────
 const DRAFT_KEY = 'order_draft_v1';
 const SHOPPING_BOUGHT_KEY = 'shopping_bought_v1';
@@ -408,9 +420,8 @@ function changeStatus(row, status) {
     ? `Перевести в «${status}»? Заказ уйдёт в архив.`
     : `Изменить статус на «${status}»?`;
 
-  showConfirm('Изменить статус', msg, 'Подтвердить', () => {
-    sendToBot({ action: 'change_status', order_row: row, status });
-    // Оптимистичное обновление локально
+  showConfirm('Изменить статус', msg, 'Подтвердить', async () => {
+    // Оптимистичное локальное обновление на экране
     const o = ACTIVE_ORDERS.find(o => o.row == row);
     if (o) {
       o.status = status;
@@ -422,8 +433,10 @@ function changeStatus(row, status) {
     const updated = findOrder(row);
     if (updated) renderOrderDetail(updated, ACTIVE_ORDERS.some(o => o.row == row));
     renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
-    showToast('Статус обновлён');
-    if (twa) setTimeout(() => twa.close(), 600);
+    updateAllBadges();
+
+    // Отправляем тихий фоновый запрос в GAS вместо sendToBot
+    await sendActionToGAS({ action: 'change_status', order_row: row, status });
   });
 }
 
@@ -614,14 +627,70 @@ document.addEventListener('click', e => {
 });
 
 // ── AI импорт ────────────────────────────────────────────
-function runAI() {
+async function runAI() {
   const txt = document.getElementById('ai-txt').value.trim();
   if (!txt) { showToast('Вставьте сообщение клиента'); return; }
-  const request_id = 'ai_' + Date.now();
-  sessionStorage.setItem('pending_ai_id', request_id);
-  sendToBot({ action: 'ai_request', text: txt, request_id });
-  showToast('🤖 Отправлено боту');
-  if (twa) setTimeout(() => twa.close(), 600);
+  
+  showLoadingOverlay("🤖 ИИ разбирает сообщение...");
+  try {
+    const response = await fetch(GAS_URL, {
+      method: 'POST',
+      redirect: 'follow',
+      body: JSON.stringify({ action: 'ai_request', text: txt })
+    });
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && !resData.error && resData.ai_result) {
+        applyAIResultToForm(resData.ai_result);
+        showToast("🤖 Сообщение успешно разобрано!");
+      } else {
+        showToast("⚠️ Ошибка: " + (resData?.error || "ИИ не распознал текст"));
+      }
+    } else {
+      showToast("⚠️ Ошибка сети ИИ");
+    }
+  } catch (e) {
+    console.error("[AI request error]", e);
+    showToast("⚠️ Не удалось связаться с ИИ");
+  } finally {
+    hideLoadingOverlay();
+  }
+}
+
+// Заполнение формы деталями из ИИ и добавление блюд в корзину
+function applyAIResultToForm(res) {
+  if (!res) return;
+  if (res.client) document.getElementById('o-client').value = res.client;
+  if (res.contact) document.getElementById('o-contact').value = res.contact;
+  if (res.event_date) document.getElementById('o-date').value = dateToISO(res.event_date);
+  if (res.event_time) document.getElementById('o-time').value = res.event_time;
+  if (res.delivery_type) {
+    setDeliv(res.delivery_type, null, true);
+    if (res.delivery_type === 'Доставка' && res.address) {
+      document.getElementById('o-addr').value = res.address;
+    }
+  }
+  if (res.delivery_cost) document.getElementById('o-dcost').value = res.delivery_cost;
+  if (res.note) document.getElementById('c-note').value = res.note;
+  
+  if (res.dishes && res.dishes.length) {
+    cart = {};
+    cartOrder = [];
+    res.dishes.forEach((d, i) => {
+      const menuDish = MENU.find(m => m.name.toLowerCase() === d.name.toLowerCase());
+      const id = menuDish ? String(menuDish.id) : ('ai' + i);
+      cart[id] = {
+        d: { id, name: d.name, cat: menuDish?.cat || 'ИИ-Импорт' },
+        q: +d.qty || 1,
+        p: +d.price || (menuDish ? +menuDish.price : 0),
+        unit: d.unit || menuDish?.unit || 'порц.',
+        manual: !menuDish
+      };
+      cartOrder.push(id);
+    });
+  }
+  saveDraft();
+  renderCurrentTab();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1100,11 +1169,12 @@ function submitShopping() {
   }
 }
 
-function _sendShoppingToBot(text, merge) {
-  sendToBot({ action: 'ai_shopping', text, merge });
+async function _sendShoppingToBot(text, merge) {
   document.getElementById('sh-text').value = '';
-  showToast('🤖 Отправлено боту…');
-  if (twa) setTimeout(() => twa.close(), 600);
+  showToast('🤖 ИИ анализирует закупки…');
+  
+  // Отправляем тихий запрос к GAS
+  await sendActionToGAS({ action: 'ai_shopping', text, merge });
 }
 
 // ── Отметка купленного (только локально) ─────────────────
@@ -1166,27 +1236,25 @@ function _showAmountDialog(count) {
   setTimeout(() => document.getElementById('sh-amount-input')?.focus(), 200);
 }
 
-function _submitConfirmedPurchase() {
+async function _submitConfirmedPurchase() {
   closeModal();
   const amount   = parseFloat(document.getElementById('sh-amount-input')?.value || '') || null;
   const boughtIds = (SHOPPING || []).filter(i => i.bought).map(i => i.id);
 
-  // Удаляем подтверждённые из localStorage
-  const boughtMap = JSON.parse(localStorage.getItem(SHOPPING_BOUGHT_KEY) || '{}');
-  boughtIds.forEach(id => delete boughtMap[id]);
-  localStorage.setItem(SHOPPING_BOUGHT_KEY, JSON.stringify(boughtMap));
-
-  sendToBot({
-    action:     'shopping_confirm',
-    bought_ids: boughtIds,
-    amount:     amount,   // null если не указано
-  });
-
-  // Локально убираем отмеченные
+  // Оптимистичное локальное обновление (убираем отмеченные товары и обновляем счетчик)
   SHOPPING = SHOPPING.filter(i => !i.bought);
   renderShopping(SHOPPING);
-  showToast('✅ Покупка подтверждена' + (amount ? ` · ${amount} BYN` : ''));
-  if (twa) setTimeout(() => twa.close(), 1200);
+  updateAllBadges();
+
+  const success = await sendActionToGAS({
+    action:     'shopping_confirm',
+    bought_ids: boughtIds,
+    amount:     amount,
+  });
+  
+  if (success) {
+    showToast('✅ Покупка подтверждена' + (amount ? ` · ${amount} BYN` : ''));
+  }
 }
 
 // ── Очистка всего списка ──────────────────────────────────
@@ -1196,13 +1264,12 @@ function clearAllShopping() {
     'Очистить всё',
     `Удалить все ${SHOPPING.length} позиций из списка закупок?`,
     'Удалить всё',
-    () => {
-      sendToBot({ action: 'shopping_clear_all' });
+    async () => {
       SHOPPING = [];
-      localStorage.removeItem(SHOPPING_BOUGHT_KEY);
       renderShopping(SHOPPING);
-      showToast('🗑 Список очищен');
-      if (twa) setTimeout(() => twa.close(), 600);
+      updateAllBadges();
+
+      await sendActionToGAS({ action: 'shopping_clear_all' });
     },
     null,
     true // danger
@@ -1245,7 +1312,7 @@ function openDishEdit(id) {
 
 function openNewDishForm() { openDishEdit(null); }
 
-function saveDishEdit() {
+async function saveDishEdit() {
   const name  = document.getElementById('de-name').value.trim();
   const cat   = document.getElementById('de-cat').value.trim();
   const price = parseFloat(document.getElementById('de-price').value) || 0;
@@ -1253,17 +1320,18 @@ function saveDishEdit() {
   const unit  = document.getElementById('de-unit').value;
   if (!name) { showToast('Укажите название'); return; }
 
-  sendToBot({ action: editingDishId ? 'edit_dish' : 'create_dish', dish_id: editingDishId, name, cat, price, cost, unit });
-
+  // Оптимистичное локальное сохранение
   if (editingDishId) {
     const d = MENU.find(m => String(m.id) === String(editingDishId));
     if (d) { d.name=name; d.cat=cat; d.price=price; d.cost=cost; d.unit=unit; }
+  } else {
+    MENU.push({ id:'new_'+Date.now(), name, cat, price, cost, unit });
   }
-  // При создании не добавляем локально — ждём обновления от бота
-
-  showToast(editingDishId ? '✓ Блюдо обновлено' : '✓ Блюдо добавлено');
   goBack();
   renderMenuEdit(MENU, menuEditQuery, menuEditCat);
+
+  // Тихо отправляем изменения на сервер
+  await sendActionToGAS({ action: editingDishId ? 'edit_dish' : 'create_dish', dish_id: editingDishId, name, cat, price, cost, unit });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1370,6 +1438,12 @@ const MONTH_NAMES = [
 ];
 
 async function loadDashboard() {
+  // Блокируем кнопку "вперёд", если выбран текущий или будущий месяц
+  const now = new Date();
+  const isCurrentOrFuture = (dashYear > now.getFullYear()) || (dashYear === now.getFullYear() && dashMonth >= now.getMonth() + 1);
+  const nextBtn = document.getElementById('db-month-next');
+  if (nextBtn) nextBtn.disabled = isCurrentOrFuture;
+
   document.getElementById('dashboard-body').innerHTML = `
     <div class="empty-state">
       <div class="spin" style="width:28px;height:28px;border-width:2px"></div>
@@ -1509,7 +1583,6 @@ function renderDashboard(d) {
 }
 
 function submitFinance(finType) {
-  if (isFinSubmitting) return;
   const isIncome  = finType === 'income_extra';
   const amountEl  = document.getElementById(isIncome ? 'db-income-amount'  : 'db-expense-amount');
   const noteEl    = document.getElementById(isIncome ? 'db-income-note'    : 'db-expense-note');
@@ -1527,14 +1600,14 @@ function submitFinance(finType) {
     isIncome ? 'Записать доход' : 'Записать расход',
     `${isIncome ? 'Доход' : 'Расход'}: ${amount.toFixed(2)} BYN${note ? '\n' + note : ''}`,
     'Записать',
-    () => {
-      isFinSubmitting = true;
-      sendToBot({ action: 'add_finance', fin_type: finType, amount, note });
-      amountEl.value = '';
-      if (noteEl) noteEl.value = '';
-      showToast(isIncome ? '💰 Доход записан' : '💸 Расход записан');
-      setTimeout(() => { isFinSubmitting = false; }, 2000);
-      if (twa) setTimeout(() => twa.close(), 800);
+    async () => {
+      const success = await sendActionToGAS({ action: 'add_finance', fin_type: finType, amount, note });
+      if (success) {
+        amountEl.value = '';
+        if (noteEl) noteEl.value = '';
+        showToast(isIncome ? '💰 Доход записан' : '💸 Расход записан');
+        loadDashboard(); // перегружаем только данные дашборда на экране
+      }
     }
   );
 }
