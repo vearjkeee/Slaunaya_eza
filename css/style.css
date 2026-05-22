@@ -375,24 +375,7 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
   transition:border-color .15s;
 }
 .sh-ta:focus{border-color:var(--acc)}
-.sh-ta.listening{border-color:var(--red);background:var(--red-l)}
-.sh-mic-btn{
-  position:absolute;
-  right:8px;top:50%;
-  transform:translateY(-50%);
-  width:30px;height:30px;
-  border:none;background:transparent;
-  font-size:18px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  border-radius:6px;
-  transition:background .15s;
-}
-.sh-mic-btn:active{background:var(--acc-l)}
-.sh-mic-btn.on{animation:pulse-mic .8s ease-in-out infinite}
-@keyframes pulse-mic{
-  0%,100%{transform:translateY(-50%) scale(1)}
-  50%{transform:translateY(-50%) scale(1.2)}
-}
+
 .sh-send-btn{
   width:100%;height:38px;
   background:var(--acc-l);border:none;
