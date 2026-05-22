@@ -560,3 +560,26 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 
 .sh-unrec { background:rgba(255,193,7,.08) !important; border-left:3px solid #ffc107; }
 .sh-raw   { font-size:11px; color:var(--hint); font-style:italic; margin-top:2px; }
+
+/* ══ КОРЗИНА — КОРРЕКТИРОВКА ВВОДА КОЛИЧЕСТВА ═══════════ */
+input.qv {
+  -moz-appearance: textfield;
+  text-align: center;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  outline: none;
+  width: 32px;
+  height: 30px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg);
+}
+input.qv::-webkit-outer-spin-button,
+input.qv::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
