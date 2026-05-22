@@ -245,7 +245,7 @@ function attachSwipeHandlers(container) {
       dx = startX - curX;
       const dy = Math.abs(startY - curY);
       // Только горизонтальный свайп
-      if (dx > 10 && dy < dx * 0.7) {
+      if (dx > 35 && dy < dx * 0.45) {
         swiping = true;
         const shift = Math.min(dx, 90);
         card.style.transform = `translateX(-${shift}px)`;
