@@ -1099,58 +1099,8 @@ function saveOrder() {
 // ЗАКУПКИ
 // ══════════════════════════════════════════════════════════
 
-// ── Web Speech API ────────────────────────────────────────
-let speechRecognition = null;
-let isListening = false;
-
-function toggleSpeech() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    showToast('⚠️ Браузер не поддерживает голосовой ввод');
-    return;
-  }
-  if (isListening) { speechRecognition?.stop(); return; }
-
-  speechRecognition          = new SpeechRecognition();
-  speechRecognition.lang     = 'ru-RU';
-  speechRecognition.continuous     = true;
-  speechRecognition.interimResults = true;
-
-  const ta       = document.getElementById('sh-text');
-  const btn      = document.getElementById('sh-mic');
-  const baseText = ta.value;
-
-  speechRecognition.onstart = () => {
-    isListening = true;
-    btn.classList.add('on');
-    ta.classList.add('listening');
-    showToast('🎤 Говорите…');
-  };
-  speechRecognition.onresult = (e) => {
-    let interim = '', final = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final   += e.results[i][0].transcript;
-      else                       interim += e.results[i][0].transcript;
-    }
-    ta.value = (baseText + (baseText ? ' ' : '') + final + interim).trim();
-  };
-  speechRecognition.onend = () => {
-    isListening = false;
-    btn.classList.remove('on');
-    ta.classList.remove('listening');
-  };
-  speechRecognition.onerror = (e) => {
-    isListening = false;
-    btn.classList.remove('on');
-    ta.classList.remove('listening');
-    if (e.error !== 'aborted') showToast('⚠️ Ошибка: ' + e.error);
-  };
-  speechRecognition.start();
-}
-
 // ── Отправка текста в AI ──────────────────────────────────
 function submitShopping() {
-  if (isListening) speechRecognition?.stop();
   const text = (document.getElementById('sh-text')?.value || '').trim();
   if (!text) { showToast('Введите или надиктуйте список'); return; }
 
