@@ -583,3 +583,27 @@ input.qv::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* ══ ШАГИ ОФОРМЛЕНИЯ (STEPPER BAR) ══════════════════════ */
+.stepper-bar {
+  display: flex;
+  height: 3px;
+  background: var(--border);
+  width: 100%;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.step-seg {
+  flex: 1;
+  height: 100%;
+  transition: background .2s ease;
+}
+.step-seg.on {
+  background: var(--acc);
+}
+
+/* ══ ПОВЫШЕНИЕ КОНТРАСТНОСТИ РУЧКИ DRAG-N-DROP ══════════ */
+.ci-drag {
+  color: var(--text); /* Автоматически берет цвет текста активной темы TG */
+  opacity: 0.55;       /* Слегка приглушаем, чтобы не резало глаз */
+}
