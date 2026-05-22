@@ -565,7 +565,7 @@ function chQ(id, delta) {
 function addManual() {
   const name  = document.getElementById('m-name').value.trim();
   const price = parseFloat(document.getElementById('m-price').value) || 0;
-  const qty   = parseInt(document.getElementById('m-qty').value)   || 1;
+  const qty   = parseFloat(document.getElementById('m-qty').value)   || 1; // Заменили parseInt на parseFloat
   if (!name)    { showToast('Укажите название'); return; }
   if (price <= 0) { showToast('Укажите цену'); return; }
   const id = 'm' + (manualId++);
@@ -606,16 +606,20 @@ function renderCartFull() {
   if (noteW) noteW.style.display = 'block';
   sv.disabled = false;
 
-  const discount = draftDiscount;
+  const discount = parseFloat(document.getElementById('c-discount')?.value || 0) || 0;
 
   items.innerHTML = `<div class="discount-wrap">
     <span class="dw-l">Скидка</span>
     <input class="dw-inp" type="number" id="c-discount" value="${discount||''}"
-      placeholder="0" min="0" max="100" step="1" oninput="draftDiscount=parseFloat(this.value)||0;updCart();saveDraft()"/>
+      placeholder="0" min="0" max="100" step="1" oninput="updCart();saveDraft()"/>
     <span class="dw-pct">%</span>
   </div>` +
   keys.map(k => {
     const it = cart[k];
+    // Если единица измерения — кг или л, используем шаг 0.1, иначе 1
+    const unitLower = (it.unit || '').toLowerCase().trim();
+    const step = ['кг', 'л', 'кг.', 'л.', 'kg', 'l'].includes(unitLower) ? 0.1 : 1;
+
     return `<div class="ci" id="ci-${k}" draggable="false" data-key="${k}">
       <div class="ci-top">
         <div class="ci-drag" title="Перетащить">⠿</div>
@@ -625,9 +629,10 @@ function renderCartFull() {
       <div class="ci-bot">
         <div class="ci-pe">
           <div class="qc">
-            <button class="qb" onclick="chCartQ('${k}',-1)">−</button>
-            <div class="qv">${it.q}</div>
-            <button class="qb" onclick="chCartQ('${k}',1)">+</button>
+            <button class="qb" onclick="chCartQ('${k}',-${step})">−</button>
+            <input class="qv" type="number" value="${it.q}" step="${step}" min="0"
+              oninput="chCartQInput('${k}', this.value)"/>
+            <button class="qb" onclick="chCartQ('${k}',${step})">+</button>
           </div>
           <span class="ci-unit" style="margin:0 4px">×</span>
           <input class="ci-pi" type="number" value="${it.p.toFixed(2)}" step="0.5" min="0"
@@ -746,17 +751,39 @@ function removeFromCart(id) {
 function chCartQ(id, d) {
   if (!cart[id]) return;
   cart[id].q += d;
+  cart[id].q = Math.round(cart[id].q * 100) / 100; // Округление дробной части
+
   if (cart[id].q <= 0) { 
     delete cart[id]; 
-    cartOrder = cartOrder.filter(k => k !== id); // <--- Добавить это
+    cartOrder = cartOrder.filter(k => k !== id);
     saveDraft(); 
     renderCartFull(); 
     return; 
   }
-  document.querySelector(`#ci-${CSS.escape(id)} .qv`).textContent = cart[id].q;
+
+  const qv = document.querySelector(`#ci-${CSS.escape(id)} .qv`);
+  if (qv) {
+    if (qv.tagName === 'INPUT') qv.value = cart[id].q;
+    else qv.textContent = cart[id].q;
+  }
+
   const t = document.getElementById('cit-' + id);
   if (t) t.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
   saveDraft(); updCart();
+}
+
+function chCartQInput(id, val) {
+  if (!cart[id]) return;
+  let q = parseFloat(val);
+  if (isNaN(q) || q < 0) q = 0; // Защита от пустого или некорректного ввода
+
+  cart[id].q = Math.round(q * 100) / 100; // Избегаем проблем с округлением JS (0.1 + 0.2)
+  
+  const t = document.getElementById('cit-' + id);
+  if (t) t.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
+  
+  saveDraft();
+  updCart();
 }
 
 function chCartPrice(id, v) {
