@@ -35,6 +35,141 @@ let searchQuery      = '';
 let menuEditQuery    = '';
 let menuEditCat      = 'Все';
 
+// Ключи локального хранилища для оффлайн-кэша и состояния экранов
+const CACHE_KEY = 'slaunaya_data_cache_v2';
+const STATE_KEY = 'slaunaya_screen_state_v2';
+
+// Загрузка данных из локального кэша
+function loadLocalCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      MENU           = parsed.menu           || [];
+      CLIENTS        = parsed.clients        || [];
+      ACTIVE_ORDERS  = parsed.active_orders  || [];
+      ARCHIVE_ORDERS = parsed.archive_orders || [];
+      SHOPPING       = parsed.shopping_list  || [];
+      return parsed.updated || '';
+    }
+  } catch (e) {
+    console.warn("[cache] Ошибка чтения кэша", e);
+  }
+  return '';
+}
+
+// Сохранение полученных данных в локальный кэш
+function saveLocalCache(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn("[cache] Ошибка записи кэша", e);
+  }
+}
+
+// Сохранение текущего навигационного состояния
+function saveLastScreen() {
+  const state = {
+    tab: currentTab,
+    screenStack: screenStack,
+    activeScreenId: document.querySelector('.scr.on')?.id || null,
+    currentOrderRow: currentOrderRow,
+    editingRow: editingRow
+  };
+  try {
+    localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  } catch (e) {}
+}
+
+// Восстановление навигационного состояния при запуске
+function restoreLastScreen() {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (!raw) {
+      switchTab('orders', document.querySelector('.tab-bar .tb:nth-child(1)'));
+      return;
+    }
+    const state = JSON.parse(raw);
+    currentTab = state.tab || 'orders';
+    screenStack = state.screenStack || [];
+    currentOrderRow = state.currentOrderRow || null;
+    editingRow = state.editingRow || null;
+
+    const tabIndexMap = { orders: 1, new: 2, shopping: 3, dashboard: 4, menu: 5 };
+    const btnIdx = tabIndexMap[currentTab] || 1;
+    const btn = document.querySelector(`.tab-bar .tb:nth-child(${btnIdx})`);
+
+    _silentSwitchTab(currentTab, btn, state.activeScreenId);
+  } catch (e) {
+    console.warn("[state] Ошибка восстановления экрана", e);
+    switchTab('orders', document.querySelector('.tab-bar .tb:nth-child(1)'));
+  }
+}
+
+// Бесшовное переключение экранов при восстановлении состояния без сброса черновиков
+function _silentSwitchTab(tab, btn, targetScreenId) {
+  document.querySelectorAll('.tb').forEach(b => b?.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  
+  document.querySelectorAll('.scr').forEach(s => {
+    s.classList.remove('on','back');
+    s.style.transform = 'translateX(100%)';
+  });
+
+  const screenId = targetScreenId || tabRoots()[tab];
+  const el = document.getElementById(screenId);
+  if (el) {
+    el.style.transform = '';
+    el.classList.add('on');
+  }
+  
+  screenStack.forEach(sid => {
+    const backEl = document.getElementById(sid);
+    if (backEl) {
+      backEl.classList.add('back');
+      backEl.classList.remove('on');
+      backEl.style.transform = '';
+    }
+  });
+
+  if (screenId === 's-order-detail' && currentOrderRow) {
+    const order = findOrder(currentOrderRow);
+    if (order) {
+      const isActive = ACTIVE_ORDERS.some(o => o.row == currentOrderRow);
+      document.getElementById('od-title').textContent = order.client || 'Заказ';
+      document.getElementById('od-sub').textContent =
+        (order.event_date || '') + (order.event_time ? ' в ' + order.event_time : '');
+      renderOrderDetail(order, isActive);
+    }
+  }
+  updateBackButtonVisibility();
+}
+
+// Управление видимостью кнопки «Назад» на Шаге 1
+function updateBackButtonVisibility() {
+  const btn = document.querySelector('#s-new-details .hdr-back');
+  if (btn) {
+    btn.style.display = (screenStack.length > 0) ? 'flex' : 'none';
+  }
+}
+
+// Обновление всех иконок-баджей в нижнем таб-баре
+function updateAllBadges() {
+  const activeCount = (ACTIVE_ORDERS || []).length;
+  const oBdg = document.getElementById('bdg-orders');
+  if (oBdg) {
+    oBdg.textContent = activeCount;
+    oBdg.classList.toggle('on', activeCount > 0);
+  }
+
+  const shopCount = (SHOPPING || []).filter(i => !i.bought).length;
+  const sBdg = document.getElementById('bdg-shop');
+  if (sBdg) {
+    sBdg.textContent = shopCount;
+    sBdg.classList.toggle('on', shopCount > 0);
+  }
+}
+
 // ── Черновик ────────────────────────────────────────────
 const DRAFT_KEY = 'order_draft_v1';
 const SHOPPING_BOUGHT_KEY = 'shopping_bought_v1';
@@ -93,32 +228,39 @@ function applyDraft(d) {
 // ══════════════════════════════════════════════════════════
 async function loadCache(force = false) {
   const result = await fetchData(force);
-  if (!result) { showToast("⚠️ Нет соединения"); return; }
+  if (!result) return false;
 
   MENU           = result.data.menu           || [];
   CLIENTS        = result.data.clients        || [];
   ACTIVE_ORDERS  = result.data.active_orders  || [];
   ARCHIVE_ORDERS = result.data.archive_orders || [];
   SHOPPING       = result.data.shopping_list  || [];
-  // Применяем локальные bought-флаги
-  const boughtMap = JSON.parse(localStorage.getItem(SHOPPING_BOUGHT_KEY) || '{}');
-  SHOPPING.forEach(it => {
-    if (boughtMap[it.id] !== undefined) it.bought = boughtMap[it.id];
-  });
+
+  // Сохраняем свежие данные в локальный кэш
+  saveLocalCache(result.data);
 
   const upd   = result.data.updated || '';
   const label = (upd ? 'Обновлено: ' + upd : '') + sourceLabel(result.source);
   document.getElementById('cache-time').textContent  = label;
   document.getElementById('cache-time2').textContent = label;
+  
+  updateAllBadges();
+  return true;
 }
 
 async function forceReload() {
   showToast('⟳ Обновляю…');
   renderSkeletons('orders-list', 4);
-  await loadCache(true);
-  renderCurrentTab();
-  showToast('✓ Данные обновлены');
+  const success = await loadCache(true);
+  if (success) {
+    renderCurrentTab();
+    showToast('✓ Данные обновлены');
+  } else {
+    showToast('⚠️ Ошибка соединения');
+  }
 }
+
+
 
 // ══════════════════════════════════════════════════════════
 // НАВИГАЦИЯ
@@ -140,27 +282,33 @@ function switchTab(tab, btn) {
   el.classList.add('on');
 
   if (tab === 'new') {
-    if (forceNewOrder) {
-      forceNewOrder = false;
-      clearDraft();
+    // Если мы дублируем/редактируем, пропускаем prompt черновика
+    const bypass = sessionStorage.getItem('bypass_draft');
+    if (bypass) {
+      sessionStorage.removeItem('bypass_draft');
       initNewOrder();
-      renderCurrentTab();
+      updateBackButtonVisibility();
+      saveLastScreen();
       return;
     }
+
     const draft = loadDraft();
     if (draft && (draft.client || Object.keys(draft.cart || {}).length > 0)) {
       showConfirm(
         'Незавершённый заказ',
         `Продолжить оформление заказа${draft.client ? ' для ' + draft.client : ''}?`,
         'Продолжить',
-        () => { initNewOrder(); applyDraft(draft); renderCurrentTab(); },
-        () => { clearDraft(); initNewOrder(); }
+        () => { applyDraft(draft); updateBackButtonVisibility(); renderCurrentTab(); saveLastScreen(); },
+        () => { clearDraft(); initNewOrder(); updateBackButtonVisibility(); saveLastScreen(); }
       );
       return;
     }
     initNewOrder();
   }
+  
+  updateBackButtonVisibility();
   renderCurrentTab();
+  saveLastScreen();
 }
 
 function pushScreen(id) {
@@ -173,6 +321,9 @@ function pushScreen(id) {
   next.getBoundingClientRect();
   next.style.transform = '';
   next.classList.add('on');
+  
+  updateBackButtonVisibility();
+  saveLastScreen();
 }
 
 function goBack() {
@@ -182,16 +333,10 @@ function goBack() {
   if (cur) { cur.classList.remove('on'); cur.style.transform = 'translateX(100%)'; }
   const prevEl = document.getElementById(prev);
   prevEl.classList.remove('back');
-  prevEl.style.transform = '';
   prevEl.classList.add('on');
-
-  // Перерисовка контента при возврате
-  if (prev === 's-catalog') filterMenu();
-  if (prev === 's-cart') renderCartFull();
-  if (prev === 's-order-detail' && currentOrderRow) {
-    const order = findOrder(currentOrderRow);
-    if (order) renderOrderDetail(order, ACTIVE_ORDERS.some(o => o.row == currentOrderRow));
-  }
+  
+  updateBackButtonVisibility();
+  saveLastScreen();
 }
 
 function renderCurrentTab() {
@@ -316,7 +461,10 @@ function duplicateOrder(row) {
   const order = findOrder(row);
   if (!order) return;
 
-  forceNewOrder = true;
+  // Устанавливаем временный флаг обхода проверки черновика
+  sessionStorage.setItem('bypass_draft', 'true');
+
+  // 1. Сначала переключаем вкладку
   const newBtn = document.querySelector('.tb:nth-child(2)');
   switchTab('new', newBtn);
 
@@ -347,8 +495,9 @@ function duplicateOrder(row) {
   document.getElementById('c-note').value   = order.note     || '';
   setPay(!!order.prepayment, null, true);
 
-  // 3. Сохраняем это как новый черновик
+  // 3. Сохраняем это как новый черновик и в состояние экрана
   saveDraft();
+  saveLastScreen();
   showToast('📋 Заказ скопирован — укажите дату');
 }
 
@@ -1162,12 +1311,47 @@ function handleURLParams() {
 // ══════════════════════════════════════════════════════════
 async function init() {
   renderSkeletons('orders-list', 4);
-  await loadCache();
+  
+  // 1. Мгновенно загружаем локальный кэш (если есть)
+  const localUpdated = loadLocalCache();
+  const hasLocalData = MENU.length || ACTIVE_ORDERS.length;
+  
+  if (hasLocalData) {
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('app').style.display    = 'flex';
+    
+    const label = (localUpdated ? 'Обновлено: ' + localUpdated : '') + ' · 💾 локально';
+    document.getElementById('cache-time').textContent  = label;
+    document.getElementById('cache-time2').textContent = label;
+    
+    restoreLastScreen();
+    updateAllBadges();
+    renderCurrentTab();
+  }
 
-  document.getElementById('loader').style.display = 'none';
-  document.getElementById('app').style.display    = 'flex';
+  // 2. В фоне тянем новые данные с сервера
+  const success = await loadCache(false);
 
-  renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
+  // Если кэша не было и сеть лежит — показываем ошибку
+  if (!hasLocalData && !success) {
+    document.getElementById('loader').innerHTML = `
+      <div style="text-align:center;padding:20px;">
+        <div style="font-size:40px;margin-bottom:12px;">⚠️</div>
+        <div class="load-text" style="font-size:14px;color:var(--hint)">Не удалось загрузить данные.<br>Проверьте подключение к интернету.</div>
+        <button onclick="location.reload()" class="hdr-btn acc" style="margin-top:16px;height:38px;padding:0 24px;">Повторить</button>
+      </div>`;
+    return;
+  }
+
+  // Если кэша не было, но сеть вернула данные — убираем лоадер и открываем
+  if (document.getElementById('loader').style.display !== 'none') {
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('app').style.display    = 'flex';
+    restoreLastScreen();
+  }
+
+  updateBackButtonVisibility();
+  renderCurrentTab();
   handleURLParams();
 
   // Автосохранение черновика каждые 10 сек
