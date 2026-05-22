@@ -513,15 +513,21 @@ function showConfirm(title, text, okLabel, onOk, onCancel, danger = false, extra
   okBtn.textContent = okLabel;
   okBtn.className   = 'cd-btn cd-ok' + (danger ? ' danger' : '');
 
-  // Вторая кнопка (для merge/replace)
+  // Вторая кнопка (для слияния/замены)
   const btns = document.querySelector('.cd-btns');
   const existing2 = document.getElementById('cd-second');
   if (existing2) existing2.remove();
+  
   if (extra?.secondBtn) {
     const btn2 = document.createElement('button');
     btn2.id        = 'cd-second';
-    btn2.className = 'cd-btn cd-ok';
-    btn2.style.background = 'var(--blue)';
+    btn2.className = 'cd-btn';
+    // Визуальный акцент опасности (красная рамка и текст) вместо синего цвета
+    btn2.style.background = 'transparent';
+    btn2.style.border = '1px solid var(--urgent)';
+    btn2.style.color = 'var(--urgent)';
+    btn2.style.fontSize = '14px';
+    btn2.style.fontWeight = '600';
     btn2.textContent = extra.secondBtn;
     btn2.onclick = () => {
       document.getElementById('confirm-dialog').classList.remove('on');
