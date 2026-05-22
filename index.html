@@ -89,6 +89,12 @@
           <button class="hdr-btn acc" onclick="goToCatalog()">Меню →</button>
         </div>
       </div>
+      <!-- Полоска прогресса Шаг 1 -->
+      <div class="stepper-bar">
+        <div class="step-seg on"></div>
+        <div class="step-seg"></div>
+        <div class="step-seg"></div>
+      </div>
       <div class="scroll">
         <div class="sec">
           <div class="sec-hdr">Клиент</div>
@@ -193,6 +199,12 @@
           <button class="hdr-btn acc" onclick="goToCart()">Корзина →</button>
         </div>
       </div>
+      <!-- Полоска прогресса Шаг 2 -->
+      <div class="stepper-bar">
+        <div class="step-seg on"></div>
+        <div class="step-seg on"></div>
+        <div class="step-seg"></div>
+      </div>
       <div class="srch-wrap">
         <input class="srch-inp" type="text" id="srch"
                placeholder="Поиск блюда…" oninput="filterMenu()"/>
@@ -218,6 +230,12 @@
           <div class="hdr-title">Корзина</div>
           <div class="hdr-sub" id="cart-sub">Пусто</div>
         </div>
+      </div>
+      <!-- Полоска прогресса Шаг 3 -->
+      <div class="stepper-bar">
+        <div class="step-seg on"></div>
+        <div class="step-seg on"></div>
+        <div class="step-seg on"></div>
       </div>
       <div class="scroll" id="cart-body">
         <div class="cart-empty" id="cart-empty">
@@ -263,10 +281,7 @@
       <div class="sh-input-panel">
         <div class="sh-ta-wrap">
           <textarea class="sh-ta" id="sh-text" rows="2"
-                    placeholder="Напишите или надиктуйте список…"></textarea>
-          <button class="sh-mic-btn" id="sh-mic" onclick="toggleSpeech()" title="Голосовой ввод">
-            🎤
-          </button>
+                    placeholder="Напишите список закупки…"></textarea>
         </div>
         <button class="sh-send-btn" id="sh-send" onclick="submitShopping()">
           ✦ Разобрать через AI
