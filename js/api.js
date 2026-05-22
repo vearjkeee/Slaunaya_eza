@@ -78,3 +78,45 @@ async function fetchDashboard(month, year) {
   }
   return null;
 }
+
+// Фоновая отправка действий напрямую в GAS без закрытия WebApp
+async function sendActionToGAS(data) {
+  if (typeof showLoadingOverlay === "function") showLoadingOverlay("Сохранение изменений...");
+  try {
+    const response = await fetch(GAS_URL, {
+      method: "POST",
+      redirect: "follow",
+      body: JSON.stringify(data)
+    });
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData && !resData.error) {
+        // Обновляем глобальные массивы приложения свежими данными от GAS
+        if (resData.menu) MENU = resData.menu;
+        if (resData.clients) CLIENTS = resData.clients;
+        if (resData.active_orders) ACTIVE_ORDERS = resData.active_orders;
+        if (resData.archive_orders) ARCHIVE_ORDERS = resData.archive_orders;
+        if (resData.shopping_list) SHOPPING = resData.shopping_list;
+        
+        // Переписываем локальный оффлайн кэш
+        if (typeof saveLocalCache === "function") saveLocalCache(resData);
+        
+        // Мгновенно обновляем интерфейс и иконки-баджи на экранах
+        if (typeof updateAllBadges === "function") updateAllBadges();
+        if (typeof renderCurrentTab === "function") renderCurrentTab();
+        
+        return true;
+      } else {
+        if (typeof showToast === "function") showToast("⚠️ Ошибка: " + (resData.error || "неизвестно"));
+      }
+    } else {
+      if (typeof showToast === "function") showToast("⚠️ Ошибка сервера: " + response.status);
+    }
+  } catch (e) {
+    console.error("[sendActionToGAS] Error:", e);
+    if (typeof showToast === "function") showToast("⚠️ Ошибка соединения / скрипта");
+  } finally {
+    if (typeof hideLoadingOverlay === "function") hideLoadingOverlay();
+  }
+  return false;
+}
