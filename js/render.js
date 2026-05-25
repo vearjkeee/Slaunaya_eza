@@ -1,16 +1,15 @@
 'use strict';
 // ══════════════════════════════════════════════════════════
-// render.js — отрисовка всех списков и карточек
+// render.js — отрисовка всех списков и карточек (PWA версия)
 // ══════════════════════════════════════════════════════════
 
-// В начало render.js
 function parseDateNum(d) {
   if (!d) return 0;
   const p = d.split(".");
-  if (p.length === 3) return parseInt(p[2] + p[1] + p[0], 10); // 20260522
+  if (p.length === 3) return parseInt(p[2] + p[1] + p[0], 10);
   if (p.length === 2) {
     const yr = new Date().getFullYear(); 
-    return parseInt(yr + p[1] + p[0], 10); // Если года нет, подставляем текущий
+    return parseInt(yr + p[1] + p[0], 10);
   }
   return 0;
 }
@@ -35,14 +34,12 @@ function statusClass(st) {
   return map[st] || "st-new";
 }
 
-// Короткая дата "10.05" из "10.05.2026"
 function shortDate(d) {
   if (!d) return "";
   const parts = d.split(".");
   return parts.length >= 2 ? parts[0] + "." + parts[1] : d;
 }
 
-// Срочность по дате мероприятия
 function urgencyClass(eventDate) {
   if (!eventDate) return "";
   const today    = new Date(); today.setHours(0,0,0,0);
@@ -55,7 +52,6 @@ function urgencyClass(eventDate) {
   return "";
 }
 
-// Группа даты для заголовка
 function dateGroup(eventDate) {
   if (!eventDate) return "Позже";
   const today    = new Date(); today.setHours(0,0,0,0);
@@ -103,7 +99,6 @@ function renderOrders(activeOrders, archiveOrders, currentTab, searchQuery) {
 
   let list = currentTab === 'active' ? activeOrders : archiveOrders;
 
-  // Поиск — работает по обоим спискам одновременно если есть запрос
   if (searchQuery && searchQuery.length >= 2) {
     const q = searchQuery.toLowerCase();
     const searchIn = [...activeOrders, ...archiveOrders];
@@ -147,8 +142,6 @@ function renderSearchResults(el, list) {
   attachSwipeHandlers(el);
 }
 
-// Активные — группировка Сегодня / Завтра / Просрочено / Позже
-// Внутри группы сортировка по date_order убыванию (новые сверху)
 function renderActiveGrouped(el, list) {
   const groups = {};
   const ORDER  = ["Просрочено", "Сегодня", "Завтра", "Позже"];
@@ -159,7 +152,6 @@ function renderActiveGrouped(el, list) {
     groups[g].push(o);
   });
 
-  // Внутри каждой группы — по date_order убыванию
   Object.values(groups).forEach(arr =>
     arr.sort((a, b) => parseDateNum(b.date_order) - parseDateNum(a.date_order))
   );
@@ -175,7 +167,6 @@ function renderActiveGrouped(el, list) {
   attachSwipeHandlers(el);
 }
 
-// Архив — по date_order убыванию (свежие сверху), без группировки
 function renderArchiveList(el, list) {
   const sorted = [...list].sort((a, b) =>
     parseDateNum(b.date_order) - parseDateNum(a.date_order)
@@ -191,7 +182,6 @@ function orderCardHTML(o, withSwipe) {
 
   const urgBar  = urg ? `<div class="urgency-bar ${urg}"></div>` : '';
   
-  // === НОВЫЙ БЛОК ДАТ ===
   const dateCreated = o.date_order 
     ? `<div class="oc-d-create">📝 Создан ${shortDate(o.date_order)}</div>` 
     : '';
@@ -201,7 +191,6 @@ function orderCardHTML(o, withSwipe) {
     : '';
     
   const dateRow = `<div class="oc-dates">${dateCreated}${dateDelivery}</div>`;
-  // ======================
 
   const swipeWrap  = withSwipe && isActive ? `<div class="swipe-action" data-row="${o.row}"><span class="sa-ico">✔️</span>Готово</div>` : '';
   const cardInner  = `<div class="order-card" data-row="${o.row}" onclick="openOrderDetail(${o.row})">
@@ -225,7 +214,7 @@ function orderCardHTML(o, withSwipe) {
 }
 
 // ══════════════════════════════════════════════════════════
-// СВАЙП ВЛЕВО → "ВЫПОЛНЕНО" (с confirm)
+// СВАЙП КАРТОЧКИ (прямая отправка в GAS вместо Telegram бота)
 // ══════════════════════════════════════════════════════════
 function attachSwipeHandlers(container) {
   container.querySelectorAll('.order-card').forEach(card => {
@@ -244,7 +233,6 @@ function attachSwipeHandlers(container) {
       const curY = e.touches[0].clientY;
       dx = startX - curX;
       const dy = Math.abs(startY - curY);
-      // Только горизонтальный свайп
       if (dx > 35 && dy < dx * 0.45) {
         swiping = true;
         const shift = Math.min(dx, 90);
@@ -255,16 +243,16 @@ function attachSwipeHandlers(container) {
 
     card.addEventListener('touchend', () => {
       if (swiping && dx >= THRESHOLD) {
-        // Держим карточку сдвинутой пока не ответит confirm
         const row = parseInt(card.dataset.row);
         showConfirm(
           "Выполнен?",
           `Перевести заказ в статус «✔️ Выполнен»?`,
           "Да, выполнен",
-          () => {
-            sendToBot({ action: 'change_status', order_row: row, status: '✔️ Выполнен' });
+          async () => {
+            card.style.transform = '';
+            // Отправляем изменения в фоновом режиме напрямую на GAS
+            await sendActionToGAS({ action: 'change_status', order_row: row, status: '✔️ Выполнен' });
             showToast('✔️ Статус обновлён');
-            if (window.twa) setTimeout(() => window.twa.close(), 600);
           },
           () => { card.style.transform = ''; }
         );
@@ -276,7 +264,7 @@ function attachSwipeHandlers(container) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ДЕТАЛЬНЫЙ ВИД ЗАКАЗА
+// ДЕТАЛИ ЗАКАЗА (Кнопка "Предчек" вызывает Canvas-модал)
 // ══════════════════════════════════════════════════════════
 function renderOrderDetail(order, isActive) {
   const sc      = statusClass(order.status);
@@ -289,7 +277,6 @@ function renderOrderDetail(order, isActive) {
 
   let html = '';
 
-  // Статус
   html += `<div class="sec" style="margin-top:12px">
     <div class="sec-hdr">Статус</div>
     <div class="sec-body">
@@ -301,7 +288,6 @@ function renderOrderDetail(order, isActive) {
     </div>
   </div>`;
 
-  // Кнопки действий
   if (isActive) {
     const addrEnc = encodeURIComponent(order.address || '');
     html += `<div class="actions cols2">
@@ -313,7 +299,6 @@ function renderOrderDetail(order, isActive) {
       </button>
     </div>`;
   } else {
-    // Архивный — кнопка "Повторить заказ"
     html += `<div class="actions cols2">
       <button class="act-btn ab-blue" onclick="genReceipt(${order.row})">
         <span class="act-ico">📄</span>Предчек
@@ -324,7 +309,6 @@ function renderOrderDetail(order, isActive) {
     </div>`;
   }
 
-  // Информация
   html += `<div class="sec">
     <div class="sec-hdr">Информация</div>
     <div class="sec-body">
@@ -349,7 +333,7 @@ function renderOrderDetail(order, isActive) {
         </div>
       </div>
       ${(order.note && order.note.trim()) ? `
-      <div class="row-item" style="background:rgba(255,248,220,0.7)">
+      <div class="row-item" style="background:rgba(255,248,220,0.3)">
         <div class="ri-ico">💬</div>
         <div class="ri-body">
           <div class="ri-sub" style="margin-bottom:2px">Примечание</div>
@@ -359,7 +343,6 @@ function renderOrderDetail(order, isActive) {
     </div>
   </div>`;
 
-  // Состав
   if (dishes.length) {
     html += `<div class="sec">
       <div class="sec-hdr">Состав (${dishes.length} позиций)</div>
@@ -409,13 +392,11 @@ function renderShopping(shopping) {
     return;
   }
 
-  // Группируем по категориям, некупленные первыми
   const notBought = shopping.filter(i => !i.bought);
   const bought    = shopping.filter(i => i.bought);
 
   let html = '';
 
-  // Некупленные — по категориям
   if (notBought.length) {
     const byCat = {};
     notBought.forEach(it => {
@@ -432,7 +413,6 @@ function renderShopping(shopping) {
     });
   }
 
-  // Куплено — одна группа в конце
   if (bought.length) {
     html += `<div class="sh-cat-hdr" style="margin-top:8px">✅ Куплено (${bought.length})</div>`;
     html += `<div class="sec" style="margin:0 12px 8px;border-radius:0">
@@ -441,7 +421,7 @@ function renderShopping(shopping) {
     html += `</div></div>`;
   }
 
-  html += `<div style="height:80px"></div>`; // отступ под confirm-bar
+  html += `<div style="height:80px"></div>`;
 
   el.innerHTML = html;
   _updateConfirmBar(shopping);
@@ -513,7 +493,6 @@ function showConfirm(title, text, okLabel, onOk, onCancel, danger = false, extra
   okBtn.textContent = okLabel;
   okBtn.className   = 'cd-btn cd-ok' + (danger ? ' danger' : '');
 
-  // Вторая кнопка (для слияния/замены)
   const btns = document.querySelector('.cd-btns');
   const existing2 = document.getElementById('cd-second');
   if (existing2) existing2.remove();
@@ -522,7 +501,6 @@ function showConfirm(title, text, okLabel, onOk, onCancel, danger = false, extra
     const btn2 = document.createElement('button');
     btn2.id        = 'cd-second';
     btn2.className = 'cd-btn';
-    // Визуальный акцент опасности (красная рамка и текст) вместо синего цвета
     btn2.style.background = 'transparent';
     btn2.style.border = '1px solid var(--urgent)';
     btn2.style.color = 'var(--urgent)';
