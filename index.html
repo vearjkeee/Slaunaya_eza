@@ -250,6 +250,15 @@
                placeholder="Поиск по меню…" oninput="filterMenu()"/>
       </div>
       <div class="chips-wrap" id="chips"></div>
+      <div class="manual-add">
+        <div class="f-label" style="margin-bottom:6px">Добавить вручную</div>
+        <div class="ma-row">
+          <input class="ma-inp ma-n" type="text"   id="m-name"  placeholder="Название"/>
+          <input class="ma-inp ma-p" type="number" id="m-price" placeholder="Цена" min="0" step="0.5"/>
+          <input class="ma-inp ma-q" type="number" id="m-qty"   placeholder="×"    min="0.1" step="0.1"/>
+          <button class="ma-btn" onclick="addManual()">+</button>
+        </div>
+      </div>
       <div class="scroll"><div id="menu-list"></div></div>
     </div>
 
@@ -266,14 +275,6 @@
         <div class="step-seg on"></div>
         <div class="step-seg on"></div>
         <div class="step-seg on"></div>
-      </div>
-
-      <!-- Ручное добавление позиции -->
-      <div class="manual-add-wrap">
-        <input class="f-input man-inp" type="text"   id="m-name"  placeholder="Название позиции"/>
-        <input class="f-input man-inp" type="number" id="m-price" placeholder="Цена" min="0" step="0.5"/>
-        <input class="f-input man-inp" type="number" id="m-qty"   placeholder="Кол-во" min="0.1" step="0.1"/>
-        <button class="man-add-btn" onclick="addManual()">+ Добавить</button>
       </div>
 
       <div class="scroll" id="cart-body">
