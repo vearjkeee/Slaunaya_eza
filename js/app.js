@@ -1,6 +1,8 @@
 'use strict';
 // ══════════════════════════════════════════════════════════
 // app.js — логика навигации, заказов, корзины, черновиков
+// Telegram WebApp полностью убран.
+// saveOrder / changeStatus / genReceipt → напрямую в GAS.
 // ══════════════════════════════════════════════════════════
 
 const WEBAPP_URL = "https://vearjkeee.github.io/Slaunaya_eza/index.html";
@@ -35,11 +37,15 @@ let searchQuery      = '';
 let menuEditQuery    = '';
 let menuEditCat      = 'Все';
 
-// Ключи локального хранилища для оффлайн-кэша и состояния экранов
-const CACHE_KEY = 'slaunaya_data_cache_v2';
-const STATE_KEY = 'slaunaya_screen_state_v2';
+// Ключи локального хранилища
+const CACHE_KEY           = 'slaunaya_data_cache_v2';
+const STATE_KEY           = 'slaunaya_screen_state_v2';
+const DRAFT_KEY           = 'order_draft_v1';
+const SHOPPING_BOUGHT_KEY = 'shopping_bought_v1';
 
-// Загрузка данных из локального кэша
+// ══════════════════════════════════════════════════════════
+// ЛОКАЛЬНЫЙ КЭШ
+// ══════════════════════════════════════════════════════════
 function loadLocalCache() {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
@@ -58,7 +64,6 @@ function loadLocalCache() {
   return '';
 }
 
-// Сохранение полученных данных в локальный кэш
 function saveLocalCache(data) {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(data));
@@ -67,21 +72,20 @@ function saveLocalCache(data) {
   }
 }
 
-// Сохранение текущего навигационного состояния
+// ══════════════════════════════════════════════════════════
+// СОХРАНЕНИЕ / ВОССТАНОВЛЕНИЕ СОСТОЯНИЯ ЭКРАНА
+// ══════════════════════════════════════════════════════════
 function saveLastScreen() {
   const state = {
     tab: currentTab,
-    screenStack: screenStack,
+    screenStack,
     activeScreenId: document.querySelector('.scr.on')?.id || null,
-    currentOrderRow: currentOrderRow,
-    editingRow: editingRow
+    currentOrderRow,
+    editingRow
   };
-  try {
-    localStorage.setItem(STATE_KEY, JSON.stringify(state));
-  } catch (e) {}
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (e) {}
 }
 
-// Восстановление навигационного состояния при запуске
 function restoreLastScreen() {
   try {
     const raw = localStorage.getItem(STATE_KEY);
@@ -90,15 +94,14 @@ function restoreLastScreen() {
       return;
     }
     const state = JSON.parse(raw);
-    currentTab = state.tab || 'orders';
-    screenStack = state.screenStack || [];
+    currentTab      = state.tab || 'orders';
+    screenStack     = state.screenStack || [];
     currentOrderRow = state.currentOrderRow || null;
-    editingRow = state.editingRow || null;
+    editingRow      = state.editingRow || null;
 
-    const tabIndexMap = { orders: 1, new: 2, shopping: 3, dashboard: 4, menu: 5 };
+    const tabIndexMap = { orders:1, new:2, shopping:3, dashboard:4, menu:5 };
     const btnIdx = tabIndexMap[currentTab] || 1;
-    const btn = document.querySelector(`.tab-bar .tb:nth-child(${btnIdx})`);
-
+    const btn    = document.querySelector(`.tab-bar .tb:nth-child(${btnIdx})`);
     _silentSwitchTab(currentTab, btn, state.activeScreenId);
   } catch (e) {
     console.warn("[state] Ошибка восстановления экрана", e);
@@ -106,36 +109,28 @@ function restoreLastScreen() {
   }
 }
 
-// Бесшовное переключение экранов при восстановлении состояния без сброса черновиков
 function _silentSwitchTab(tab, btn, targetScreenId) {
   document.querySelectorAll('.tb').forEach(b => b?.classList.remove('on'));
   if (btn) btn.classList.add('on');
-  
+
   document.querySelectorAll('.scr').forEach(s => {
-    s.classList.remove('on','back');
+    s.classList.remove('on', 'back');
     s.style.transform = 'translateX(100%)';
   });
 
   const screenId = targetScreenId || tabRoots()[tab];
   const el = document.getElementById(screenId);
-  if (el) {
-    el.style.transform = '';
-    el.classList.add('on');
-  }
-  
+  if (el) { el.style.transform = ''; el.classList.add('on'); }
+
   screenStack.forEach(sid => {
     const backEl = document.getElementById(sid);
-    if (backEl) {
-      backEl.classList.add('back');
-      backEl.classList.remove('on');
-      backEl.style.transform = '';
-    }
+    if (backEl) { backEl.classList.add('back'); backEl.classList.remove('on'); backEl.style.transform = ''; }
   });
 
   if (screenId === 's-order-detail' && currentOrderRow) {
-    const order = findOrder(currentOrderRow);
+    const order    = findOrder(currentOrderRow);
+    const isActive = ACTIVE_ORDERS.some(o => o.row == currentOrderRow);
     if (order) {
-      const isActive = ACTIVE_ORDERS.some(o => o.row == currentOrderRow);
       document.getElementById('od-title').textContent = order.client || 'Заказ';
       document.getElementById('od-sub').textContent =
         (order.event_date || '') + (order.event_time ? ' в ' + order.event_time : '');
@@ -145,29 +140,22 @@ function _silentSwitchTab(tab, btn, targetScreenId) {
   updateBackButtonVisibility();
 }
 
-// Управление видимостью кнопки «Назад» на Шаге 1
 function updateBackButtonVisibility() {
   const btn = document.querySelector('#s-new-details .hdr-back');
-  if (btn) {
-    btn.style.display = (screenStack.length > 0) ? 'flex' : 'none';
-  }
+  if (btn) btn.style.display = screenStack.length > 0 ? 'flex' : 'none';
 }
 
-// Обновление всех иконок-баджей в нижнем таб-баре
+// ══════════════════════════════════════════════════════════
+// БАДЖИ / ОВЕРЛЕЙ
+// ══════════════════════════════════════════════════════════
 function updateAllBadges() {
   const activeCount = (ACTIVE_ORDERS || []).length;
   const oBdg = document.getElementById('bdg-orders');
-  if (oBdg) {
-    oBdg.textContent = activeCount;
-    oBdg.classList.toggle('on', activeCount > 0);
-  }
+  if (oBdg) { oBdg.textContent = activeCount; oBdg.classList.toggle('on', activeCount > 0); }
 
   const shopCount = (SHOPPING || []).filter(i => !i.bought).length;
   const sBdg = document.getElementById('bdg-shop');
-  if (sBdg) {
-    sBdg.textContent = shopCount;
-    sBdg.classList.toggle('on', shopCount > 0);
-  }
+  if (sBdg) { sBdg.textContent = shopCount; sBdg.classList.toggle('on', shopCount > 0); }
 }
 
 function showLoadingOverlay(text = "Загрузка...") {
@@ -178,14 +166,12 @@ function showLoadingOverlay(text = "Загрузка...") {
 }
 
 function hideLoadingOverlay() {
-  const l = document.getElementById('loader');
-  l.style.display = 'none';
+  document.getElementById('loader').style.display = 'none';
 }
 
-// ── Черновик ────────────────────────────────────────────
-const DRAFT_KEY = 'order_draft_v1';
-const SHOPPING_BOUGHT_KEY = 'shopping_bought_v1';
-
+// ══════════════════════════════════════════════════════════
+// ЧЕРНОВИК
+// ══════════════════════════════════════════════════════════
 function saveDraft() {
   const client = document.getElementById('o-client')?.value || '';
   if (!client && !Object.keys(cart).length) { clearDraft(); return; }
@@ -205,23 +191,23 @@ function saveDraft() {
     editingRow,
     ts: Date.now(),
   };
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch(e) {}
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch (e) {}
 }
 
 function loadDraft() {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
     return raw ? JSON.parse(raw) : null;
-  } catch(e) { return null; }
+  } catch (e) { return null; }
 }
 
 function clearDraft() {
-  try { localStorage.removeItem(DRAFT_KEY); } catch(e) {}
+  try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
 }
 
 function applyDraft(d) {
   if (!d) return;
-  draftDiscount = (+d.discount || 0);
+  draftDiscount = +d.discount || 0;
   document.getElementById('o-client').value  = d.client  || '';
   document.getElementById('o-contact').value = d.contact || '';
   document.getElementById('o-date').value    = d.date    || '';
@@ -230,7 +216,7 @@ function applyDraft(d) {
   document.getElementById('o-dcost').value   = d.dcost   || '';
   setDeliv(d.delivType || 'Самовывоз', null, true);
   setPay(!!d.prepay, null, true);
-  cart       = d.cart       || {};
+  cart      = d.cart      || {};
   cartOrder = d.cartOrder || Object.keys(d.cart || {});
   editingRow = d.editingRow || null;
 }
@@ -248,14 +234,13 @@ async function loadCache(force = false) {
   ARCHIVE_ORDERS = result.data.archive_orders || [];
   SHOPPING       = result.data.shopping_list  || [];
 
-  // Сохраняем свежие данные в локальный кэш
   saveLocalCache(result.data);
 
   const upd   = result.data.updated || '';
   const label = (upd ? 'Обновлено: ' + upd : '') + sourceLabel(result.source);
   document.getElementById('cache-time').textContent  = label;
   document.getElementById('cache-time2').textContent = label;
-  
+
   updateAllBadges();
   return true;
 }
@@ -272,13 +257,11 @@ async function forceReload() {
   }
 }
 
-
-
 // ══════════════════════════════════════════════════════════
 // НАВИГАЦИЯ
 // ══════════════════════════════════════════════════════════
 function tabRoots() {
-  return { orders:'s-orders', new:'s-new-details', shopping:'s-shopping', dashboard: 's-dashboard', menu:'s-menu' };
+  return { orders:'s-orders', new:'s-new-details', shopping:'s-shopping', dashboard:'s-dashboard', menu:'s-menu' };
 }
 
 function switchTab(tab, btn) {
@@ -287,14 +270,13 @@ function switchTab(tab, btn) {
   document.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
   document.querySelectorAll('.scr').forEach(s => {
-    s.classList.remove('on','back'); s.style.transform = 'translateX(100%)';
+    s.classList.remove('on', 'back'); s.style.transform = 'translateX(100%)';
   });
   const el = document.getElementById(tabRoots()[tab]);
   el.style.transform = '';
   el.classList.add('on');
 
   if (tab === 'new') {
-    // Если мы дублируем/редактируем, пропускаем prompt черновика
     const bypass = sessionStorage.getItem('bypass_draft');
     if (bypass) {
       sessionStorage.removeItem('bypass_draft');
@@ -303,7 +285,6 @@ function switchTab(tab, btn) {
       saveLastScreen();
       return;
     }
-
     const draft = loadDraft();
     if (draft && (draft.client || Object.keys(draft.cart || {}).length > 0)) {
       showConfirm(
@@ -317,7 +298,7 @@ function switchTab(tab, btn) {
     }
     initNewOrder();
   }
-  
+
   updateBackButtonVisibility();
   renderCurrentTab();
   saveLastScreen();
@@ -333,28 +314,26 @@ function pushScreen(id) {
   next.getBoundingClientRect();
   next.style.transform = '';
   next.classList.add('on');
-  
   updateBackButtonVisibility();
   saveLastScreen();
 }
 
 function goBack() {
   if (!screenStack.length) return;
-  const prev  = screenStack.pop();
-  const cur   = document.querySelector('.scr.on');
+  const prev   = screenStack.pop();
+  const cur    = document.querySelector('.scr.on');
   if (cur) { cur.classList.remove('on'); cur.style.transform = 'translateX(100%)'; }
   const prevEl = document.getElementById(prev);
   prevEl.classList.remove('back');
   prevEl.classList.add('on');
-  
   updateBackButtonVisibility();
   saveLastScreen();
 }
 
 function renderCurrentTab() {
-  if (currentTab === 'orders')   renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
-  if (currentTab === 'shopping') renderShopping(SHOPPING);
-  if (currentTab === 'menu')     { renderMenuChips(); renderMenuEdit(MENU, menuEditQuery, menuEditCat); }
+  if (currentTab === 'orders')    renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
+  if (currentTab === 'shopping')  renderShopping(SHOPPING);
+  if (currentTab === 'menu')      { renderMenuChips(); renderMenuEdit(MENU, menuEditQuery, menuEditCat); }
   if (currentTab === 'dashboard') loadDashboard();
 }
 
@@ -365,7 +344,6 @@ function setOrderTab(tab, btn) {
   orderTab = tab;
   document.querySelectorAll('#s-orders .f-tgl-btn').forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
-  // Если есть активный поиск — не сбрасываем его при переключении вкладки
   renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
 }
 
@@ -378,12 +356,10 @@ function openOrderDetail(row) {
   currentOrderRow = row;
   const order     = findOrder(row);
   if (!order) { showToast('Заказ не найден'); return; }
-
-  const isActive = ACTIVE_ORDERS.some(o => o.row == row);
+  const isActive  = ACTIVE_ORDERS.some(o => o.row == row);
   document.getElementById('od-title').textContent = order.client || 'Заказ';
   document.getElementById('od-sub').textContent =
     (order.event_date || '') + (order.event_time ? ' в ' + order.event_time : '');
-
   renderOrderDetail(order, isActive);
   pushScreen('s-order-detail');
 }
@@ -401,13 +377,13 @@ function openStatusModal(row) {
   const statuses = [ST.NEW, ST.CONF, ST.COOK, ST.DONE, ST.CANC];
   let html = '<div class="status-grid">';
   statuses.forEach(s => {
-    const sc  = ({[ST.NEW]:"st-new",[ST.CONF]:"st-conf",[ST.COOK]:"st-cook",[ST.DONE]:"st-done",[ST.CANC]:"st-canc"})[s] || '';
-    const on  = order?.status === s ? ' on' : '';
+    const sc = ({ [ST.NEW]:"st-new",[ST.CONF]:"st-conf",[ST.COOK]:"st-cook",[ST.DONE]:"st-done",[ST.CANC]:"st-canc" })[s] || '';
+    const on = order?.status === s ? ' on' : '';
     html += `<button class="st-btn ${sc}${on}" onclick="changeStatus(${row},'${s}')">${s}</button>`;
   });
   html += '</div>';
   document.getElementById('modal-title').textContent = 'Изменить статус';
-  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal-body').innerHTML    = html;
   document.getElementById('modal').classList.add('on');
 }
 
@@ -421,7 +397,7 @@ function changeStatus(row, status) {
     : `Изменить статус на «${status}»?`;
 
   showConfirm('Изменить статус', msg, 'Подтвердить', async () => {
-    // Оптимистичное локальное обновление на экране
+    // Оптимистичное локальное обновление
     const o = ACTIVE_ORDERS.find(o => o.row == row);
     if (o) {
       o.status = status;
@@ -435,24 +411,25 @@ function changeStatus(row, status) {
     renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
     updateAllBadges();
 
-    // Отправляем тихий фоновый запрос в GAS вместо sendToBot
+    // Отправляем в GAS напрямую (без бота)
     await sendActionToGAS({ action: 'change_status', order_row: row, status });
   });
 }
 
 // ══════════════════════════════════════════════════════════
-// ПРЕДЧЕК / КАРТЫ / ДУБЛИРОВАНИЕ
+// ПРЕДЧЕК — генерация локально через receipt.js
 // ══════════════════════════════════════════════════════════
 function genReceipt(row) {
-  sendToBot({ action: 'get_receipt', order_row: row });
-  showToast('📄 Запрос отправлен боту');
-  if (twa) setTimeout(() => twa.close(), 600);
+  showReceiptModal(row);
 }
 
+// ══════════════════════════════════════════════════════════
+// КАРТА / МАРШРУТ
+// ══════════════════════════════════════════════════════════
 function openMapChoice(encodedAddr) {
   const address = decodeURIComponent(encodedAddr || '');
   if (!address || address === 'Самовывоз') { showToast('Адрес не указан'); return; }
-  const q = encodeURIComponent(address);
+  const q    = encodeURIComponent(address);
   const apps = [
     { name: 'Google Карты',     url: `https://maps.google.com/?q=${q}` },
     { name: 'Яндекс Карты',     url: `https://maps.yandex.ru/?text=${q}` },
@@ -466,26 +443,25 @@ function openMapChoice(encodedAddr) {
                background:var(--bg);font-size:15px;font-family:inherit;color:var(--text);
                cursor:pointer;text-align:left;padding:0 16px">${a.name}</button>`
     ).join('') + '</div>';
-  document.getElementById('modal-title').textContent = 'Маршрут'; // <--- ДОБАВИТЬ
+  document.getElementById('modal-title').textContent = 'Маршрут';
   document.getElementById('modal').classList.add('on');
 }
 
+// ══════════════════════════════════════════════════════════
+// ДУБЛИРОВАНИЕ ЗАКАЗА
+// ══════════════════════════════════════════════════════════
 function duplicateOrder(row) {
   const order = findOrder(row);
   if (!order) return;
 
-  // Устанавливаем временный флаг обхода проверки черновика
   sessionStorage.setItem('bypass_draft', 'true');
-
-  // 1. Сначала переключаем вкладку
   const newBtn = document.querySelector('.tb:nth-child(2)');
   switchTab('new', newBtn);
 
-  // 2. Теперь заполняем данные
   editingRow = null;
   cart = {};
   cartOrder = [];
-  (order.dishes ||[]).forEach((d, i) => {
+  (order.dishes || []).forEach((d, i) => {
     const menuDish = MENU.find(m => m.name === d.name);
     const id = menuDish ? String(menuDish.id) : ('dup' + i);
     cart[id] = {
@@ -500,15 +476,14 @@ function duplicateOrder(row) {
 
   document.getElementById('o-client').value  = order.client || '';
   document.getElementById('o-contact').value = order.contact || '';
-  document.getElementById('o-date').value    = ''; 
+  document.getElementById('o-date').value    = '';
   document.getElementById('o-time').value    = order.event_time || '';
   setDeliv(order.delivery_type || 'Самовывоз', null, true);
-  document.getElementById('o-addr').value   = order.address  || '';
-  document.getElementById('o-dcost').value  = order.delivery || '';
-  document.getElementById('c-note').value   = order.note     || '';
+  document.getElementById('o-addr').value  = order.address  || '';
+  document.getElementById('o-dcost').value = order.delivery || '';
+  document.getElementById('c-note').value  = order.note     || '';
   setPay(!!order.prepayment, null, true);
 
-  // 3. Сохраняем это как новый черновик и в состояние экрана
   saveDraft();
   saveLastScreen();
   showToast('📋 Заказ скопирован — укажите дату');
@@ -527,11 +502,11 @@ function openEditOrder() {
   document.getElementById('o-date').value    = dateToISO(order.event_date || '');
   document.getElementById('o-time').value    = order.event_time || '';
   setDeliv(order.delivery_type || 'Самовывоз', null, true);
-  document.getElementById('o-addr').value   = order.address  || '';
-  document.getElementById('o-dcost').value  = order.delivery || '';
-  document.getElementById('c-note').value   = order.note     || '';
+  document.getElementById('o-addr').value  = order.address  || '';
+  document.getElementById('o-dcost').value = order.delivery || '';
+  document.getElementById('c-note').value  = order.note     || '';
   setPay(!!order.prepayment, null, true);
-  draftDiscount = (+order.discount_percent || 0);
+  draftDiscount = +order.discount_percent || 0;
 
   cart = {};
   cartOrder = [];
@@ -626,17 +601,17 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.cw')) document.getElementById('c-drop').classList.remove('on');
 });
 
-// ── AI импорт ────────────────────────────────────────────
+// ── AI-импорт ────────────────────────────────────────────
 async function runAI() {
   const txt = document.getElementById('ai-txt').value.trim();
   if (!txt) { showToast('Вставьте сообщение клиента'); return; }
-  
+
   showLoadingOverlay("🤖 ИИ разбирает сообщение...");
   try {
     const response = await fetch(GAS_URL, {
       method: 'POST',
       redirect: 'follow',
-      body: JSON.stringify({ action: 'ai_request', text: txt })
+      body: JSON.stringify({ action: 'ai_request', text: txt, secret: APP_SECRET })
     });
     if (response.ok) {
       const resData = await response.json();
@@ -657,22 +632,20 @@ async function runAI() {
   }
 }
 
-// Заполнение формы деталями из ИИ и добавление блюд в корзину
 function applyAIResultToForm(res) {
   if (!res) return;
-  if (res.client) document.getElementById('o-client').value = res.client;
-  if (res.contact) document.getElementById('o-contact').value = res.contact;
-  if (res.event_date) document.getElementById('o-date').value = dateToISO(res.event_date);
-  if (res.event_time) document.getElementById('o-time').value = res.event_time;
+  if (res.client)        document.getElementById('o-client').value  = res.client;
+  if (res.contact)       document.getElementById('o-contact').value = res.contact;
+  if (res.event_date)    document.getElementById('o-date').value    = dateToISO(res.event_date);
+  if (res.event_time)    document.getElementById('o-time').value    = res.event_time;
   if (res.delivery_type) {
     setDeliv(res.delivery_type, null, true);
-    if (res.delivery_type === 'Доставка' && res.address) {
+    if (res.delivery_type === 'Доставка' && res.address)
       document.getElementById('o-addr').value = res.address;
-    }
   }
   if (res.delivery_cost) document.getElementById('o-dcost').value = res.delivery_cost;
-  if (res.note) document.getElementById('c-note').value = res.note;
-  
+  if (res.note)          document.getElementById('c-note').value  = res.note;
+
   if (res.dishes && res.dishes.length) {
     cart = {};
     cartOrder = [];
@@ -709,7 +682,7 @@ function buildChips(containerId, menu, filterFn) {
   el.innerHTML = '';
   cats.forEach((c, i) => {
     const ch = document.createElement('div');
-    ch.className = 'chip' + (i === 0 ? ' on' : '');
+    ch.className  = 'chip' + (i === 0 ? ' on' : '');
     ch.textContent = c;
     ch.onclick = () => {
       el.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
@@ -754,17 +727,10 @@ function filterMenu() {
 function addToCart(id) {
   const d = MENU.find(m => String(m.id) === id);
   if (!d) return;
-  
   if (!cart[id]) {
-    cart[id] = {
-      d: {id, name:d.name, cat:d.cat||''},
-      q: 0,
-      p: +d.price||0,
-      unit: d.unit || 'порц.',
-    };
+    cart[id] = { d:{id, name:d.name, cat:d.cat||''}, q:0, p:+d.price||0, unit:d.unit||'порц.' };
     cartOrder.push(id);
   }
-  
   cart[id].q++;
   saveDraft(); updCart(); filterMenu();
 }
@@ -772,10 +738,7 @@ function addToCart(id) {
 function chQ(id, delta) {
   if (!cart[id]) return;
   cart[id].q += delta;
-  if (cart[id].q <= 0) { 
-    delete cart[id]; 
-    cartOrder = cartOrder.filter(k => k !== id);
-  }
+  if (cart[id].q <= 0) { delete cart[id]; cartOrder = cartOrder.filter(k => k !== id); }
   saveDraft(); updCart(); filterMenu();
 }
 
@@ -783,11 +746,11 @@ function chQ(id, delta) {
 function addManual() {
   const name  = document.getElementById('m-name').value.trim();
   const price = parseFloat(document.getElementById('m-price').value) || 0;
-  const qty   = parseFloat(document.getElementById('m-qty').value)   || 1; // Заменили parseInt на parseFloat
+  const qty   = parseFloat(document.getElementById('m-qty').value)   || 1;
   if (!name)    { showToast('Укажите название'); return; }
   if (price <= 0) { showToast('Укажите цену'); return; }
   const id = 'm' + (manualId++);
-  cart[id] = { d:{id,name,cat:'Вручную'}, q:qty, p:price, manual:true, unit:'шт' };
+  cart[id] = { d:{id, name, cat:'Вручную'}, q:qty, p:price, manual:true, unit:'шт' };
   cartOrder.push(id);
   document.getElementById('m-name').value  = '';
   document.getElementById('m-price').value = '';
@@ -805,7 +768,7 @@ function goToCart() {
 }
 
 function renderCartFull() {
-  const keys = cartOrder.length ? cartOrder.filter(k => cart[k]) : Object.keys(cart);
+  const keys  = cartOrder.length ? cartOrder.filter(k => cart[k]) : Object.keys(cart);
   const empty = document.getElementById('cart-empty');
   const items = document.getElementById('cart-items');
   const noteW = document.getElementById('cart-note-wrap');
@@ -834,10 +797,8 @@ function renderCartFull() {
   </div>` +
   keys.map(k => {
     const it = cart[k];
-    // Если единица измерения — кг или л, используем шаг 0.1, иначе 1
     const unitLower = (it.unit || '').toLowerCase().trim();
-    const step = ['кг', 'л', 'кг.', 'л.', 'kg', 'l'].includes(unitLower) ? 0.1 : 1;
-
+    const step = ['кг','л','кг.','л.','kg','l'].includes(unitLower) ? 0.1 : 1;
     return `<div class="ci" id="ci-${k}" draggable="false" data-key="${k}">
       <div class="ci-top">
         <div class="ci-drag" title="Перетащить">⠿</div>
@@ -871,64 +832,37 @@ function _attachCartDrag() {
   if (!container || container._dragAttached) return;
   container._dragAttached = true;
 
-  let dragEl   = null;   // перетаскиваемый элемент
-  let ghostEl  = null;   // полупрозрачная копия
-  let startY   = 0;
-  let offsetY  = 0;      // смещение касания внутри элемента
-  let dragKey  = null;
+  let dragEl = null, ghostEl = null, startY = 0, offsetY = 0, dragKey = null;
 
-  // Делегирование: только ручка drag инициирует перетаскивание
   container.addEventListener('touchstart', e => {
     const handle = e.target.closest('.ci-drag');
     if (!handle) return;
     const ci = handle.closest('.ci');
-    if (!ci) return; // <-- (Кстати, тут у вас был лишний отступ в коде, я поправил)
-    
+    if (!ci) return;
     dragKey = ci.dataset.key;
     dragEl  = ci;
-
-    const rect  = ci.getBoundingClientRect();
+    const rect = ci.getBoundingClientRect();
     startY  = e.touches[0].clientY;
     offsetY = startY - rect.top;
-
-    // Создаём ghost
     ghostEl = ci.cloneNode(true);
-    ghostEl.style.cssText = `
-      position:fixed; left:${rect.left}px; top:${rect.top}px;
-      width:${rect.width}px; opacity:0.85; z-index:9999;
-      pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,0.18);
-      border-radius:var(--rad); background:var(--bg);
-      transition:none;
-    `;
+    ghostEl.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:0.85;z-index:9999;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,0.18);border-radius:var(--rad);background:var(--bg);transition:none;`;
     document.body.appendChild(ghostEl);
-
     ci.style.opacity = '0.3';
     e.preventDefault();
-  }, { passive: false }); // <-- Теперь тут всё правильно закрывается
+  }, { passive: false });
 
   document.addEventListener('touchmove', e => {
     if (!dragEl || !ghostEl) return;
     e.preventDefault();
-
     const y = e.touches[0].clientY;
     ghostEl.style.top = (y - offsetY) + 'px';
-
-    // Находим элемент под пальцем
     ghostEl.style.display = 'none';
     const elBelow = document.elementFromPoint(e.touches[0].clientX, y);
     ghostEl.style.display = '';
-
     const targetCi = elBelow?.closest('.ci[data-key]');
     if (targetCi && targetCi !== dragEl) {
-      // Вставляем dragEl перед или после target в зависимости от позиции
-      const targetRect = targetCi.getBoundingClientRect();
-      const mid        = targetRect.top + targetRect.height / 2;
-      if (y < mid) {
-        container.insertBefore(dragEl, targetCi);
-      } else {
-        container.insertBefore(dragEl, targetCi.nextSibling);
-      }
-      // Синхронизируем cart с новым DOM-порядком
+      const mid = targetCi.getBoundingClientRect().top + targetCi.getBoundingClientRect().height / 2;
+      container.insertBefore(dragEl, y < mid ? targetCi : targetCi.nextSibling);
       _syncCartOrderFromDOM(container);
     }
   }, { passive: false });
@@ -937,27 +871,18 @@ function _attachCartDrag() {
     if (!dragEl) return;
     dragEl.style.opacity = '';
     ghostEl?.remove();
-    ghostEl = null;
-    dragEl  = null;
-    dragKey = null;
-    saveDraft();
-    updCart();
+    ghostEl = dragEl = dragKey = null;
+    saveDraft(); updCart();
   };
-
   document.addEventListener('touchend',    _endDrag, { once: false });
   document.addEventListener('touchcancel', _endDrag, { once: false });
 }
 
 function _syncCartOrderFromDOM(container) {
   const domKeys = [...container.querySelectorAll('.ci[data-key]')]
-    .map(el => el.dataset.key)
-    .filter(k => cart[k]);
-
+    .map(el => el.dataset.key).filter(k => cart[k]);
   cartOrder = domKeys;
-  // Добавляем ключи которых нет в DOM в конец (на случай рассинхрона)
-  Object.keys(cart).forEach(k => {
-    if (!cartOrder.includes(k)) cartOrder.push(k);
-  });
+  Object.keys(cart).forEach(k => { if (!cartOrder.includes(k)) cartOrder.push(k); });
 }
 
 function removeFromCart(id) {
@@ -968,23 +893,10 @@ function removeFromCart(id) {
 
 function chCartQ(id, d) {
   if (!cart[id]) return;
-  cart[id].q += d;
-  cart[id].q = Math.round(cart[id].q * 100) / 100; // Округление дробной части
-
-  if (cart[id].q <= 0) { 
-    delete cart[id]; 
-    cartOrder = cartOrder.filter(k => k !== id);
-    saveDraft(); 
-    renderCartFull(); 
-    return; 
-  }
-
+  cart[id].q = Math.round((cart[id].q + d) * 100) / 100;
+  if (cart[id].q <= 0) { delete cart[id]; cartOrder = cartOrder.filter(k => k !== id); saveDraft(); renderCartFull(); return; }
   const qv = document.querySelector(`#ci-${CSS.escape(id)} .qv`);
-  if (qv) {
-    if (qv.tagName === 'INPUT') qv.value = cart[id].q;
-    else qv.textContent = cart[id].q;
-  }
-
+  if (qv) { if (qv.tagName === 'INPUT') qv.value = cart[id].q; else qv.textContent = cart[id].q; }
   const t = document.getElementById('cit-' + id);
   if (t) t.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
   saveDraft(); updCart();
@@ -993,15 +905,11 @@ function chCartQ(id, d) {
 function chCartQInput(id, val) {
   if (!cart[id]) return;
   let q = parseFloat(val);
-  if (isNaN(q) || q < 0) q = 0; // Защита от пустого или некорректного ввода
-
-  cart[id].q = Math.round(q * 100) / 100; // Избегаем проблем с округлением JS (0.1 + 0.2)
-  
+  if (isNaN(q) || q < 0) q = 0;
+  cart[id].q = Math.round(q * 100) / 100;
   const t = document.getElementById('cit-' + id);
   if (t) t.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
-  
-  saveDraft();
-  updCart();
+  saveDraft(); updCart();
 }
 
 function chCartPrice(id, v) {
@@ -1013,10 +921,15 @@ function chCartPrice(id, v) {
 }
 
 function updCart() {
-  const keys  = Object.keys(cart);
-  const qty   = keys.reduce((s, k) => s + cart[k].q, 0);
-  const sub   = keys.reduce((s, k) => s + cart[k].q * cart[k].p, 0);
-  const disc = draftDiscount;
+  const keys = Object.keys(cart);
+  const qty  = keys.reduce((s, k) => s + cart[k].q, 0);
+  const sub  = keys.reduce((s, k) => s + cart[k].q * cart[k].p, 0);
+
+  // Читаем актуальную скидку из поля если оно уже в DOM
+  const discEl = document.getElementById('c-discount');
+  if (discEl) draftDiscount = parseFloat(discEl.value) || 0;
+
+  const disc  = draftDiscount;
   const discA = sub * disc / 100;
   const deliv = delivType === 'Доставка' ? (parseFloat(document.getElementById('o-dcost')?.value) || 0) : 0;
   const total = sub - discA + deliv;
@@ -1039,33 +952,26 @@ function updCart() {
 }
 
 // ══════════════════════════════════════════════════════════
-// СОХРАНЕНИЕ ЗАКАЗА
+// СОХРАНЕНИЕ ЗАКАЗА — напрямую в GAS (без бота)
 // ══════════════════════════════════════════════════════════
-function saveOrder() {
+async function saveOrder() {
   const client = document.getElementById('o-client').value.trim();
-  const date   = document.getElementById('o-date').value; // Формат YYYY-MM-DD
+  const date   = document.getElementById('o-date').value;
   const keys   = cartOrder.length ? cartOrder : Object.keys(cart);
 
   if (!client)      { showToast('Укажите клиента'); return; }
   if (!date)        { showToast('Укажите дату'); return; }
   if (!keys.length) { showToast('Корзина пуста'); return; }
 
-  // Валидация даты
   const [yy, mm, dd] = date.split('-').map(Number);
-  const selectedDate = new Date(yy, mm - 1, dd);
+  const selectedDate  = new Date(yy, mm - 1, dd);
   selectedDate.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
 
-  if (isNaN(selectedDate.getTime())) {
-    showToast('Неверный формат даты'); return;
-  }
-  if (!editingRow && selectedDate < today) {
-    showToast('❌ Дата не может быть в прошлом'); return;
-  }
+  if (isNaN(selectedDate.getTime())) { showToast('Неверный формат даты'); return; }
+  if (!editingRow && selectedDate < today) { showToast('❌ Дата не может быть в прошлом'); return; }
 
   const dcost = delivType === 'Доставка' ? (parseFloat(document.getElementById('o-dcost').value) || 0) : 0;
-  const disc = draftDiscount;
 
   const payload = {
     action:           editingRow ? 'edit_order' : 'create_order',
@@ -1078,7 +984,7 @@ function saveOrder() {
     address:          delivType === 'Доставка' ? (document.getElementById('o-addr').value || '') : '',
     delivery:         dcost,
     prepayment:       prepay,
-    discount_percent: disc,
+    discount_percent: draftDiscount,
     note:             document.getElementById('c-note')?.value || '',
     dishes:           keys.filter(k => cart[k]).map(k => ({
       name:  cart[k].d.name,
@@ -1089,17 +995,21 @@ function saveOrder() {
     })),
   };
 
-  sendToBot(payload);
-  clearDraft();
-  showToast(editingRow ? '✓ Заказ обновлён' : '✓ Заказ создан');
-  if (window.twa) setTimeout(() => window.twa.close(), 800);
+  const result = await sendActionToGAS(payload);
+
+  if (result) {
+    clearDraft();
+    showToast(editingRow ? '✓ Заказ обновлён' : '✓ Заказ создан');
+    // Переходим на вкладку заказов
+    const ordersBtn = document.querySelector('.tab-bar .tb:nth-child(1)');
+    switchTab('orders', ordersBtn);
+  }
+  // Если result null — sendActionToGAS уже показал toast с ошибкой
 }
 
 // ══════════════════════════════════════════════════════════
 // ЗАКУПКИ
 // ══════════════════════════════════════════════════════════
-
-// ── Отправка текста в AI ──────────────────────────────────
 function submitShopping() {
   const text = (document.getElementById('sh-text')?.value || '').trim();
   if (!text) { showToast('Введите или надиктуйте список'); return; }
@@ -1110,8 +1020,7 @@ function submitShopping() {
       `В списке уже ${SHOPPING.length} позиций. Что сделать с новым?`,
       'Добавить к списку',
       () => _sendShoppingToBot(text, true),
-      null,
-      false,
+      null, false,
       { secondBtn: 'Создать новый', secondCb: () => _sendShoppingToBot(text, false) }
     );
   } else {
@@ -1122,107 +1031,66 @@ function submitShopping() {
 async function _sendShoppingToBot(text, merge) {
   document.getElementById('sh-text').value = '';
   showToast('🤖 ИИ анализирует закупки…');
-  
-  // Отправляем тихий запрос к GAS
   await sendActionToGAS({ action: 'ai_shopping', text, merge });
 }
 
-// ── Отметка купленного (только локально) ─────────────────
 function toggleBought(itemId) {
   const it = (SHOPPING || []).find(x => x.id === itemId);
   if (!it) return;
   it.bought = !it.bought;
-
-  // Сохраняем состояние bought в localStorage
   const boughtMap = JSON.parse(localStorage.getItem(SHOPPING_BOUGHT_KEY) || '{}');
   boughtMap[itemId] = it.bought;
   localStorage.setItem(SHOPPING_BOUGHT_KEY, JSON.stringify(boughtMap));
-
-  renderShopping(SHOPPING); // перерисовываем без отправки в бот
+  renderShopping(SHOPPING);
 }
 
-// ── Подтверждение покупки ─────────────────────────────────
 function confirmShoppingPurchase() {
   const bought = (SHOPPING || []).filter(i => i.bought);
   if (!bought.length) return;
-
-  // Показываем диалог с полем суммы
   _showAmountDialog(bought.length);
 }
 
 function _showAmountDialog(count) {
-  // Используем modal (он уже есть в index.html)
   const body = document.getElementById('modal-body');
   body.innerHTML = `
     <div style="padding:0 4px 8px">
       <div style="font-size:14px;color:var(--hint);margin-bottom:14px;line-height:1.5">
-        Отмечено ${count} позиций как купленные.<br>
-        Укажите сумму расходов (необязательно).
+        Отмечено ${count} позиций как купленные.<br>Укажите сумму расходов (необязательно).
       </div>
       <div class="f-group" style="padding:0;margin-bottom:16px">
         <div class="f-label">Сумма закупки (BYN)</div>
-        <input class="f-input" type="number" id="sh-amount-input"
-               placeholder="0.00" min="0" step="0.01"
-               style="margin-top:6px"/>
+        <input class="f-input" type="number" id="sh-amount-input" placeholder="0.00" min="0" step="0.01" style="margin-top:6px"/>
       </div>
       <div style="display:flex;gap:10px">
-        <button onclick="closeModal()"
-          style="flex:1;height:42px;border:1px solid var(--border);border-radius:var(--rad-s);
-                 background:var(--bg2);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--text)">
-          Отмена
-        </button>
-        <button onclick="_submitConfirmedPurchase()"
-          style="flex:2;height:42px;border:none;border-radius:var(--rad-s);
-                 background:var(--grn);color:#fff;font-size:14px;font-weight:600;
-                 font-family:inherit;cursor:pointer">
-          Подтвердить
-        </button>
+        <button onclick="closeModal()" style="flex:1;height:42px;border:1px solid var(--border);border-radius:var(--rad-s);background:var(--bg2);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;color:var(--text)">Отмена</button>
+        <button onclick="_submitConfirmedPurchase()" style="flex:2;height:42px;border:none;border-radius:var(--rad-s);background:var(--grn);color:#fff;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer">Подтвердить</button>
       </div>
     </div>`;
   document.getElementById('modal-title').textContent = '✓ Покупка совершена';
   document.getElementById('modal').classList.add('on');
-
-  // Фокус на поле суммы
   setTimeout(() => document.getElementById('sh-amount-input')?.focus(), 200);
 }
 
 async function _submitConfirmedPurchase() {
   closeModal();
-  const amount   = parseFloat(document.getElementById('sh-amount-input')?.value || '') || null;
+  const amount    = parseFloat(document.getElementById('sh-amount-input')?.value || '') || null;
   const boughtIds = (SHOPPING || []).filter(i => i.bought).map(i => i.id);
-
-  // Оптимистичное локальное обновление (убираем отмеченные товары и обновляем счетчик)
   SHOPPING = SHOPPING.filter(i => !i.bought);
   renderShopping(SHOPPING);
   updateAllBadges();
-
-  const success = await sendActionToGAS({
-    action:     'shopping_confirm',
-    bought_ids: boughtIds,
-    amount:     amount,
-  });
-  
-  if (success) {
-    showToast('✅ Покупка подтверждена' + (amount ? ` · ${amount} BYN` : ''));
-  }
+  const result = await sendActionToGAS({ action: 'shopping_confirm', bought_ids: boughtIds, amount });
+  if (result) showToast('✅ Покупка подтверждена' + (amount ? ` · ${amount} BYN` : ''));
 }
 
-// ── Очистка всего списка ──────────────────────────────────
 function clearAllShopping() {
   if (!SHOPPING?.length) { showToast('Список уже пустой'); return; }
-  showConfirm(
-    'Очистить всё',
-    `Удалить все ${SHOPPING.length} позиций из списка закупок?`,
-    'Удалить всё',
+  showConfirm('Очистить всё', `Удалить все ${SHOPPING.length} позиций из списка закупок?`, 'Удалить всё',
     async () => {
       SHOPPING = [];
       renderShopping(SHOPPING);
       updateAllBadges();
-
       await sendActionToGAS({ action: 'shopping_clear_all' });
-    },
-    null,
-    true // danger
+    }, null, true
   );
 }
 
@@ -1245,18 +1113,15 @@ function filterMenuEdit() {
 function openDishEdit(id) {
   const d = id ? MENU.find(m => String(m.id) === String(id)) : null;
   editingDishId = id || null;
-
   document.getElementById('dish-edit-title').textContent = d ? 'Редактировать блюдо' : 'Новое блюдо';
   document.getElementById('de-name').value  = d?.name  || '';
   document.getElementById('de-cat').value   = d?.cat   || '';
   document.getElementById('de-price').value = d?.price || '';
   document.getElementById('de-cost').value  = d?.cost  || '';
   document.getElementById('de-unit').value  = d?.unit  || 'порц.';
-
   const dl = document.getElementById('cat-list');
   dl.innerHTML = [...new Set(MENU.map(m => m.cat).filter(Boolean))]
     .map(c => `<option value="${esc(c)}">`).join('');
-
   pushScreen('s-dish-edit');
 }
 
@@ -1270,7 +1135,6 @@ async function saveDishEdit() {
   const unit  = document.getElementById('de-unit').value;
   if (!name) { showToast('Укажите название'); return; }
 
-  // Оптимистичное локальное сохранение
   if (editingDishId) {
     const d = MENU.find(m => String(m.id) === String(editingDishId));
     if (d) { d.name=name; d.cat=cat; d.price=price; d.cost=cost; d.unit=unit; }
@@ -1279,101 +1143,7 @@ async function saveDishEdit() {
   }
   goBack();
   renderMenuEdit(MENU, menuEditQuery, menuEditCat);
-
-  // Тихо отправляем изменения на сервер
   await sendActionToGAS({ action: editingDishId ? 'edit_dish' : 'create_dish', dish_id: editingDishId, name, cat, price, cost, unit });
-}
-
-// ══════════════════════════════════════════════════════════
-// ВСПОМОГАТЕЛЬНЫЕ
-// ══════════════════════════════════════════════════════════
-function dateToISO(d) {
-  if (!d || !d.includes('.')) return d;
-  const [dd, mm, yy] = d.split('.');
-  return `${yy}-${mm}-${dd}`;
-}
-
-// ══════════════════════════════════════════════════════════
-// URL ПАРАМЕТРЫ
-// ══════════════════════════════════════════════════════════
-function handleURLParams() {
-  const params   = new URLSearchParams(window.location.search);
-  const editRow  = params.get('edit');
-  const tabParam = params.get('tab');
-  const aiResult = params.get('ai_result');
-
-  if (tabParam === 'dashboard') {
-    switchTab('dashboard', document.querySelector('.tb:nth-child(4)'));
-    return;
-  }
-  if (tabParam === 'shopping') {
-    switchTab('shopping', document.querySelector('.tb:nth-child(3)'));
-    return;
-  }
-  if (editRow) {
-    setTimeout(() => {
-      const row = parseInt(editRow);
-      currentOrderRow = row;
-      if (findOrder(row)) { openOrderDetail(row); setTimeout(openEditOrder, 100); }
-    }, 300);
-    return;
-  }
-  if (aiResult) {
-    switchTab('new', document.querySelector('.tb:nth-child(2)'));
-    showToast('🤖 AI обработал запрос — добавьте блюда вручную');
-  }
-}
-
-// ══════════════════════════════════════════════════════════
-// ЗАПУСК
-// ══════════════════════════════════════════════════════════
-async function init() {
-  renderSkeletons('orders-list', 4);
-  
-  // 1. Мгновенно загружаем локальный кэш (если есть)
-  const localUpdated = loadLocalCache();
-  const hasLocalData = MENU.length || ACTIVE_ORDERS.length;
-  
-  if (hasLocalData) {
-    document.getElementById('loader').style.display = 'none';
-    document.getElementById('app').style.display    = 'flex';
-    
-    const label = (localUpdated ? 'Обновлено: ' + localUpdated : '') + ' · 💾 локально';
-    document.getElementById('cache-time').textContent  = label;
-    document.getElementById('cache-time2').textContent = label;
-    
-    restoreLastScreen();
-    updateAllBadges();
-    renderCurrentTab();
-  }
-
-  // 2. В фоне тянем новые данные с сервера
-  const success = await loadCache(false);
-
-  // Если кэша не было и сеть лежит — показываем ошибку
-  if (!hasLocalData && !success) {
-    document.getElementById('loader').innerHTML = `
-      <div style="text-align:center;padding:20px;">
-        <div style="font-size:40px;margin-bottom:12px;">⚠️</div>
-        <div class="load-text" style="font-size:14px;color:var(--hint)">Не удалось загрузить данные.<br>Проверьте подключение к интернету.</div>
-        <button onclick="location.reload()" class="hdr-btn acc" style="margin-top:16px;height:38px;padding:0 24px;">Повторить</button>
-      </div>`;
-    return;
-  }
-
-  // Если кэша не было, но сеть вернула данные — убираем лоадер и открываем
-  if (document.getElementById('loader').style.display !== 'none') {
-    document.getElementById('loader').style.display = 'none';
-    document.getElementById('app').style.display    = 'flex';
-    restoreLastScreen();
-  }
-
-  updateBackButtonVisibility();
-  renderCurrentTab();
-  handleURLParams();
-
-  // Автосохранение черновика каждые 10 сек
-  setInterval(saveDraft, 10000);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1382,31 +1152,19 @@ async function init() {
 let dashMonth = new Date().getMonth() + 1;
 let dashYear  = new Date().getFullYear();
 
-const MONTH_NAMES = [
-  "", "Январь","Февраль","Март","Апрель","Май","Июнь",
-  "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"
-];
+const MONTH_NAMES = ["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 
 async function loadDashboard() {
-  // Блокируем кнопку "вперёд", если выбран текущий или будущий месяц
   const now = new Date();
   const isCurrentOrFuture = (dashYear > now.getFullYear()) || (dashYear === now.getFullYear() && dashMonth >= now.getMonth() + 1);
   const nextBtn = document.getElementById('db-month-next');
   if (nextBtn) nextBtn.disabled = isCurrentOrFuture;
 
-  document.getElementById('dashboard-body').innerHTML = `
-    <div class="empty-state">
-      <div class="spin" style="width:28px;height:28px;border-width:2px"></div>
-    </div>`;
+  document.getElementById('dashboard-body').innerHTML = `<div class="empty-state"><div class="spin" style="width:28px;height:28px;border-width:2px"></div></div>`;
 
   const data = await fetchDashboard(dashMonth, dashYear);
   if (!data) {
-    document.getElementById('dashboard-body').innerHTML = `
-      <div class="empty-state">
-        <div class="empty-ico">⚠️</div>
-        <div class="empty-title">Нет данных</div>
-        <div class="empty-sub">Проверьте подключение</div>
-      </div>`;
+    document.getElementById('dashboard-body').innerHTML = `<div class="empty-state"><div class="empty-ico">⚠️</div><div class="empty-title">Нет данных</div><div class="empty-sub">Проверьте подключение</div></div>`;
     return;
   }
   renderDashboard(data);
@@ -1416,29 +1174,18 @@ function dashShiftMonth(delta) {
   dashMonth += delta;
   if (dashMonth > 12) { dashMonth = 1;  dashYear++; }
   if (dashMonth < 1)  { dashMonth = 12; dashYear--; }
-
-  // Блокируем кнопку "вперёд" если текущий месяц
   const now = new Date();
-  const isCurrentMonth = dashMonth === now.getMonth() + 1 && dashYear === now.getFullYear();
-  document.getElementById('db-month-next').disabled = isCurrentMonth;
-
-  document.getElementById('db-month-label').textContent =
-    MONTH_NAMES[dashMonth] + ' ' + dashYear;
-
+  document.getElementById('db-month-next').disabled =
+    dashMonth === now.getMonth() + 1 && dashYear === now.getFullYear();
+  document.getElementById('db-month-label').textContent = MONTH_NAMES[dashMonth] + ' ' + dashYear;
   loadDashboard();
 }
 
 function renderDashboard(d) {
-  // Обновляем заголовок
-  document.getElementById('db-month-label').textContent =
-    MONTH_NAMES[d.month] + ' ' + d.year;
-
+  document.getElementById('db-month-label').textContent = MONTH_NAMES[d.month] + ' ' + d.year;
   const fmt = v => (+v || 0).toFixed(2).replace('.', ',');
 
-  let html = '';
-
-  // ── Главные цифры ──────────────────────────────────
-  html += `<div class="db-cards">
+  let html = `<div class="db-cards">
     <div class="db-card db-card-main">
       <div class="db-card-label">Выручка</div>
       <div class="db-card-value">${fmt(d.revenue_total)} <span class="db-byn">BYN</span></div>
@@ -1461,57 +1208,42 @@ function renderDashboard(d) {
     </div>
   </div>`;
 
-  // ── Форма: доход вне бота ─────────────────────────
   html += `<div class="sec" style="margin-top:4px">
     <div class="sec-hdr">💰 Доход вне бота</div>
     <div class="sec-body">
       <div class="f-group" style="padding-top:8px">
         <div class="f-label">Сумма (BYN)</div>
-        <input class="f-input" type="number" id="db-income-amount"
-               placeholder="0.00" min="0" step="0.01" style="margin-top:6px"/>
+        <input class="f-input" type="number" id="db-income-amount" placeholder="0.00" min="0" step="0.01" style="margin-top:6px"/>
       </div>
       <div class="f-group">
         <div class="f-label">Примечание</div>
-        <input class="f-input" type="text" id="db-income-note"
-               placeholder="Наличные, перевод…" style="margin-top:6px"/>
+        <input class="f-input" type="text" id="db-income-note" placeholder="Наличные, перевод…" style="margin-top:6px"/>
       </div>
       <div style="padding:0 14px 12px">
-        <button class="sv-btn" style="margin-top:0;height:40px;font-size:14px"
-                onclick="submitFinance('income_extra')">
-          Записать доход
-        </button>
+        <button class="sv-btn" style="margin-top:0;height:40px;font-size:14px" onclick="submitFinance('income_extra')">Записать доход</button>
       </div>
     </div>
   </div>`;
 
-  // ── Форма: прочий расход ──────────────────────────
   html += `<div class="sec">
     <div class="sec-hdr">💸 Прочий расход</div>
     <div class="sec-body">
       <div class="f-group" style="padding-top:8px">
         <div class="f-label">Сумма (BYN)</div>
-        <input class="f-input" type="number" id="db-expense-amount"
-               placeholder="0.00" min="0" step="0.01" style="margin-top:6px"/>
+        <input class="f-input" type="number" id="db-expense-amount" placeholder="0.00" min="0" step="0.01" style="margin-top:6px"/>
       </div>
       <div class="f-group">
         <div class="f-label">Примечание</div>
-        <input class="f-input" type="text" id="db-expense-note"
-               placeholder="Упаковка, транспорт…" style="margin-top:6px"/>
+        <input class="f-input" type="text" id="db-expense-note" placeholder="Упаковка, транспорт…" style="margin-top:6px"/>
       </div>
       <div style="padding:0 14px 12px">
-        <button class="sv-btn" style="margin-top:0;height:40px;font-size:14px;background:var(--red)"
-                onclick="submitFinance('expense_other')">
-          Записать расход
-        </button>
+        <button class="sv-btn" style="margin-top:0;height:40px;font-size:14px;background:var(--red)" onclick="submitFinance('expense_other')">Записать расход</button>
       </div>
     </div>
   </div>`;
 
-  // ── Последние записи ──────────────────────────────
   if (d.recent_expenses && d.recent_expenses.length) {
-    html += `<div class="sec">
-      <div class="sec-hdr">Последние записи</div>
-      <div class="sec-body" style="padding:0">`;
+    html += `<div class="sec"><div class="sec-hdr">Последние записи</div><div class="sec-body" style="padding:0">`;
     d.recent_expenses.forEach(r => {
       const isIncome = r.type === "Доход вне бота";
       html += `<div class="row-item">
@@ -1533,33 +1265,106 @@ function renderDashboard(d) {
 }
 
 function submitFinance(finType) {
-  const isIncome  = finType === 'income_extra';
-  const amountEl  = document.getElementById(isIncome ? 'db-income-amount'  : 'db-expense-amount');
-  const noteEl    = document.getElementById(isIncome ? 'db-income-note'    : 'db-expense-note');
-  const amount    = parseFloat(amountEl?.value || '') || 0;
-
-  if (!amount || amount <= 0) {
-    showToast('Укажите сумму');
-    amountEl?.focus();
-    return;
-  }
-
+  const isIncome = finType === 'income_extra';
+  const amountEl = document.getElementById(isIncome ? 'db-income-amount'  : 'db-expense-amount');
+  const noteEl   = document.getElementById(isIncome ? 'db-income-note'    : 'db-expense-note');
+  const amount   = parseFloat(amountEl?.value || '') || 0;
+  if (!amount || amount <= 0) { showToast('Укажите сумму'); amountEl?.focus(); return; }
   const note = noteEl?.value?.trim() || '';
-
   showConfirm(
     isIncome ? 'Записать доход' : 'Записать расход',
     `${isIncome ? 'Доход' : 'Расход'}: ${amount.toFixed(2)} BYN${note ? '\n' + note : ''}`,
     'Записать',
     async () => {
-      const success = await sendActionToGAS({ action: 'add_finance', fin_type: finType, amount, note });
-      if (success) {
+      const result = await sendActionToGAS({ action: 'add_finance', fin_type: finType, amount, note });
+      if (result) {
         amountEl.value = '';
         if (noteEl) noteEl.value = '';
         showToast(isIncome ? '💰 Доход записан' : '💸 Расход записан');
-        loadDashboard(); // перегружаем только данные дашборда на экране
+        loadDashboard();
       }
     }
   );
+}
+
+// ══════════════════════════════════════════════════════════
+// ВСПОМОГАТЕЛЬНЫЕ
+// ══════════════════════════════════════════════════════════
+function dateToISO(d) {
+  if (!d || !d.includes('.')) return d;
+  const [dd, mm, yy] = d.split('.');
+  return `${yy}-${mm}-${dd}`;
+}
+
+// ══════════════════════════════════════════════════════════
+// URL ПАРАМЕТРЫ
+// ══════════════════════════════════════════════════════════
+function handleURLParams() {
+  const params   = new URLSearchParams(window.location.search);
+  const editRow  = params.get('edit');
+  const tabParam = params.get('tab');
+
+  if (tabParam === 'dashboard') { switchTab('dashboard', document.querySelector('.tb:nth-child(4)')); return; }
+  if (tabParam === 'shopping')  { switchTab('shopping',  document.querySelector('.tb:nth-child(3)')); return; }
+
+  if (editRow) {
+    setTimeout(() => {
+      const order = findOrder(parseInt(editRow));
+      if (order) {
+        currentOrderRow = parseInt(editRow);
+        openEditOrder();
+      }
+    }, 300);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// ИНИЦИАЛИЗАЦИЯ
+// ══════════════════════════════════════════════════════════
+async function init() {
+  // Пробуем показать приложение из локального кэша немедленно
+  const cachedTime  = loadLocalCache();
+  const hasLocalData = MENU.length > 0 || ACTIVE_ORDERS.length > 0;
+
+  if (hasLocalData) {
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('app').style.display    = 'flex';
+    restoreLastScreen();
+    updateAllBadges();
+    renderCurrentTab();
+    handleURLParams();
+
+    const label = cachedTime ? 'Кеш: ' + cachedTime + ' · обновляем…' : 'Обновляем…';
+    document.getElementById('cache-time').textContent  = label;
+    document.getElementById('cache-time2').textContent = label;
+  }
+
+  // Фоновое обновление с сервера
+  const success = await loadCache(false);
+
+  if (!hasLocalData && !success) {
+    document.getElementById('loader').innerHTML = `
+      <div style="text-align:center;padding:20px;">
+        <div style="font-size:40px;margin-bottom:12px;">⚠️</div>
+        <div class="load-text" style="font-size:14px;color:var(--hint)">Не удалось загрузить данные.<br>Проверьте подключение к интернету.</div>
+        <button onclick="location.reload()" class="hdr-btn acc" style="margin-top:16px;height:38px;padding:0 24px;">Повторить</button>
+      </div>`;
+    return;
+  }
+
+  if (!hasLocalData && success) {
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('app').style.display    = 'flex';
+    restoreLastScreen();
+  }
+
+  updateAllBadges();
+  renderCurrentTab();
+  handleURLParams();
+  updateBackButtonVisibility();
+
+  // Автосохранение черновика каждые 10 сек
+  setInterval(saveDraft, 10000);
 }
 
 init();
