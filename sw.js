@@ -5,7 +5,7 @@
 // GAS-запросы идут network-first с fallback на cache.
 // ══════════════════════════════════════════════════════════
 
-const CACHE_NAME    = 'slaunaya-shell-v1';
+const CACHE_NAME    = 'slaunaya-shell-v3';
 const GAS_CACHE     = 'slaunaya-gas-v1';
 
 // Файлы App Shell — кэшируются при установке SW
