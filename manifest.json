@@ -1,0 +1,25 @@
+{
+  "name": "Slaŭnaya Eža",
+  "short_name": "Slaŭnaya Eža",
+  "description": "Кейтеринг — управление заказами",
+  "start_url": "/Slaunaya_eza/index.html",
+  "scope": "/Slaunaya_eza/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#D85A30",
+  "background_color": "#F5F5F0",
+  "icons": [
+    {
+      "src": "icons/logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
