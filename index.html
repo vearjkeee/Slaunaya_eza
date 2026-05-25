@@ -3,16 +3,32 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="theme-color" content="#D85A30"/>
+
+<!-- PWA / iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Slaŭnaya Eža"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+
+<!-- Запрет индексации -->
+<meta name="robots" content="noindex, nofollow"/>
+
 <title>Slaŭnaya Eža</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="css/style.css?v=2"/>
+
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icons/logo.jpg"/>
+<link rel="stylesheet" href="css/style.css?v=3"/>
 </head>
 <body>
 
+<!-- ══ ЛОАДЕР ══════════════════════════════════════════════ -->
 <div id="loader">
   <div class="spin"></div>
   <div class="load-text">Загружаем данные…</div>
 </div>
+
+<!-- ══ TOAST ════════════════════════════════════════════════ -->
 <div id="toast"></div>
 
 <!-- ══ CONFIRM DIALOG ══════════════════════════════════════ -->
@@ -40,6 +56,32 @@
   </div>
 </div>
 
+<!-- ══ МОДАЛЬНЫЙ ПРЕДЧЕК ════════════════════════════════════ -->
+<div id="receipt-modal">
+  <div class="receipt-modal-bg" onclick="closeReceiptModal()"></div>
+  <div class="receipt-modal-sheet">
+    <div class="receipt-modal-hdr">
+      <div class="receipt-modal-title">Предчек</div>
+      <button class="ms-close" onclick="closeReceiptModal()">✕</button>
+    </div>
+    <div class="receipt-modal-body" id="receipt-modal-body">
+      <!-- Сюда рендерится предчек как img -->
+    </div>
+    <div class="receipt-modal-footer">
+      <button class="receipt-btn rb-save"  id="rb-save"  onclick="receiptSave()">
+        <span>⬇</span> Сохранить
+      </button>
+      <button class="receipt-btn rb-share" id="rb-share" onclick="receiptShare()">
+        <span>↗</span> Поделиться
+      </button>
+      <button class="receipt-btn rb-close" onclick="closeReceiptModal()">
+        Закрыть
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ОСНОВНОЕ ПРИЛОЖЕНИЕ ══════════════════════════════════ -->
 <div id="app" style="display:none">
 
   <div class="screens" id="screens">
@@ -89,7 +131,6 @@
           <button class="hdr-btn acc" onclick="goToCatalog()">Меню →</button>
         </div>
       </div>
-      <!-- Полоска прогресса Шаг 1 -->
       <div class="stepper-bar">
         <div class="step-seg on"></div>
         <div class="step-seg"></div>
@@ -199,7 +240,6 @@
           <button class="hdr-btn acc" onclick="goToCart()">Корзина →</button>
         </div>
       </div>
-      <!-- Полоска прогресса Шаг 2 -->
       <div class="stepper-bar">
         <div class="step-seg on"></div>
         <div class="step-seg on"></div>
@@ -207,22 +247,13 @@
       </div>
       <div class="srch-wrap">
         <input class="srch-inp" type="text" id="srch"
-               placeholder="Поиск блюда…" oninput="filterMenu()"/>
+               placeholder="Поиск по меню…" oninput="filterMenu()"/>
       </div>
       <div class="chips-wrap" id="chips"></div>
-      <div class="manual-add">
-        <div class="f-label" style="margin-bottom:6px">Добавить вручную</div>
-        <div class="ma-row">
-          <input class="ma-inp ma-n" type="text"   id="m-name"  placeholder="Название"/>
-          <input class="ma-inp ma-p" type="number" id="m-price" placeholder="Цена" min="0" step="0.5"/>
-          <input class="ma-inp ma-q" type="number" id="m-qty"   placeholder="×"    min="0.1" step="0.1"/>
-          <button class="ma-btn" onclick="addManual()">+</button>
-        </div>
-      </div>
       <div class="scroll"><div id="menu-list"></div></div>
     </div>
 
-    <!-- ══ ШАГ 3: КОРЗИНА ══════════════════════════════════ -->
+    <!-- ══ ШАГ 3: КОРЗИНА ═══════════════════════════════════ -->
     <div class="scr" id="s-cart">
       <div class="hdr">
         <button class="hdr-back" onclick="goBack()">‹</button>
@@ -231,12 +262,20 @@
           <div class="hdr-sub" id="cart-sub">Пусто</div>
         </div>
       </div>
-      <!-- Полоска прогресса Шаг 3 -->
       <div class="stepper-bar">
         <div class="step-seg on"></div>
         <div class="step-seg on"></div>
         <div class="step-seg on"></div>
       </div>
+
+      <!-- Ручное добавление позиции -->
+      <div class="manual-add-wrap">
+        <input class="f-input man-inp" type="text"   id="m-name"  placeholder="Название позиции"/>
+        <input class="f-input man-inp" type="number" id="m-price" placeholder="Цена" min="0" step="0.5"/>
+        <input class="f-input man-inp" type="number" id="m-qty"   placeholder="Кол-во" min="0.1" step="0.1"/>
+        <button class="man-add-btn" onclick="addManual()">+ Добавить</button>
+      </div>
+
       <div class="scroll" id="cart-body">
         <div class="cart-empty" id="cart-empty">
           <div style="font-size:44px">🛒</div>
@@ -270,14 +309,12 @@
       </div>
     </div>
 
-<!-- ══ ВКЛАДКА 3: ЗАКУПКИ ═══════════════════════════════ -->
+    <!-- ══ ВКЛАДКА 3: ЗАКУПКИ ════════════════════════════════ -->
     <div class="scr" id="s-shopping">
       <div class="cache-bar">
         <span class="cache-time" id="cache-time2">—</span>
         <button class="refresh-btn" onclick="forceReload()">↻ Обновить</button>
       </div>
-
-      <!-- Панель ввода -->
       <div class="sh-input-panel">
         <div class="sh-ta-wrap">
           <textarea class="sh-ta" id="sh-text" rows="2"
@@ -287,8 +324,6 @@
           ✦ Разобрать через AI
         </button>
       </div>
-
-      <!-- Кнопка очистки всего -->
       <div class="sh-actions-bar">
         <button class="sh-act-btn sh-act-danger" style="flex:none;padding:0 16px"
                 onclick="clearAllShopping()">
@@ -298,32 +333,25 @@
           Отмечайте позиции в магазине,<br>затем нажмите «Подтвердить»
         </span>
       </div>
-
       <div class="scroll" id="shopping-list"></div>
-
-      <!-- Плавающая кнопка подтверждения покупки -->
       <div class="sh-confirm-bar" id="sh-confirm-bar"></div>
     </div>
 
-<!-- ══ ВКЛАДКА 5: ДАШБОРД ══════════════════════════════ -->
+    <!-- ══ ВКЛАДКА 4: ДАШБОРД ════════════════════════════════ -->
     <div class="scr" id="s-dashboard">
-
-      <!-- Переключатель месяца -->
       <div class="db-month-bar">
         <button class="db-month-btn" onclick="dashShiftMonth(-1)">‹</button>
         <div class="db-month-label" id="db-month-label">Май 2026</div>
         <button class="db-month-btn" onclick="dashShiftMonth(1)" id="db-month-next">›</button>
       </div>
-
       <div class="scroll" id="dashboard-body">
         <div class="empty-state">
           <div class="spin" style="width:28px;height:28px;border-width:2px"></div>
         </div>
       </div>
-
     </div>
 
-    <!-- ══ ВКЛАДКА 4: МЕНЮ-РЕДАКТОР ════════════════════════ -->
+    <!-- ══ ВКЛАДКА 5: МЕНЮ-РЕДАКТОР ════════════════════════ -->
     <div class="scr" id="s-menu">
       <div class="hdr" style="padding-right:12px">
         <div class="hdr-body" style="padding-left:14px">
@@ -427,8 +455,9 @@
 
 </div><!-- /app -->
 
-<script src="js/api.js"></script>
-<script src="js/render.js"></script>
-<script src="js/app.js"></script>
+<script src="js/api.js?v=3"></script>
+<script src="js/render.js?v=3"></script>
+<script src="js/receipt.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>
