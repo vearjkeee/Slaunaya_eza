@@ -5,7 +5,7 @@
 // GAS-запросы идут network-first с fallback на cache.
 // ══════════════════════════════════════════════════════════
 
-const CACHE_VERSION = '1.0.6'; // меняй только это при каждом деплое
+const CACHE_VERSION = '1.0.7'; // Обновлено для принудительного сброса кэша клиентов
 const CACHE_NAME    = 'slaunaya-shell-' + CACHE_VERSION;
 const GAS_CACHE     = 'slaunaya-gas-'   + CACHE_VERSION;
 
@@ -18,7 +18,7 @@ const SHELL_FILES = [
   '/Slaunaya_eza/js/render.js',
   '/Slaunaya_eza/js/app.js',
   '/Slaunaya_eza/js/receipt.js',
-  '/Slaunaya_eza/icons/logo.jpg',
+  '/Slaunaya_eza/icons/logo.png', // Унифицировано с PNG
   '/Slaunaya_eza/manifest.json',
 ];
 
@@ -60,8 +60,6 @@ self.addEventListener('fetch', event => {
     event.respondWith(cacheFirstShell(event.request));
     return;
   }
-
-  // Остальное — стандартный fetch
 });
 
 // ── Network-first для GAS (данные) ───────────────────────
@@ -90,7 +88,7 @@ async function networkFirstGAS(request) {
 
 // ── Cache-first для статических файлов ───────────────────
 async function cacheFirstShell(request) {
-  const cached = await caches.match(request, { ignoreSearch: true }); // <--- ДОБАВЛЕНО { ignoreSearch: true }
+  const cached = await caches.match(request, { ignoreSearch: true });
   if (cached) return cached;
   try {
     const response = await fetch(request);
