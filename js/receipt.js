@@ -170,7 +170,7 @@ function _drawReceipt(ctx, order, logo, canvasH) {
   }
   ctx.textAlign = "left";
 
-  _hline(ctx, ML, y, W - MR, RC.ink, 0.8);
+  _hairline(ctx, ML, y, W - MR, 0.8, RC.ink);
   y += 5 * PT_MM;
 
   // Информационная плашка даты и статуса документа
@@ -207,7 +207,7 @@ function _drawReceipt(ctx, order, logo, canvasH) {
   }
 
   y += 3 * PT_MM;
-  _hline(ctx, ML, y, W - MR, RC.ink, 0.8);
+  _hairline(ctx, ML, y, W - MR, 0.8, RC.ink);
   y += 7 * PT_MM;
 
   // ── 3. ТАБЛИЦА БЛЮД ──
@@ -389,7 +389,7 @@ function _drawReceipt(ctx, order, logo, canvasH) {
 // ВСПОМОГАТЕЛЬНЫЕ РИСОВАТЕЛЬНЫЕ ФУНКЦИИ
 // ══════════════════════════════════════════════════════════
 
-function _hline(ctx, x1, y, x2, color, lw) {
+function _hairline(ctx, x1, y, x2, lw, color) {
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth   = lw;
