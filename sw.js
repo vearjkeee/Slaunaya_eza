@@ -90,7 +90,7 @@ async function networkFirstGAS(request) {
 
 // ── Cache-first для статических файлов ───────────────────
 async function cacheFirstShell(request) {
-  const cached = await caches.match(request);
+  const cached = await caches.match(request, { ignoreSearch: true }); // <--- ДОБАВЛЕНО { ignoreSearch: true }
   if (cached) return cached;
   try {
     const response = await fetch(request);
@@ -100,7 +100,6 @@ async function cacheFirstShell(request) {
     }
     return response;
   } catch (err) {
-    // Критическая ошибка — возвращаем пустой ответ
     return new Response('Offline', { status: 503 });
   }
 }
