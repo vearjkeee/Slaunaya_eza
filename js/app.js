@@ -661,7 +661,7 @@ async function runAI() {
       const resData = await response.json();
       if (resData && !resData.error && resData.ai_result) {
         applyAIResultToForm(resData.ai_result);
-        showToast("🤖 Сообщение успешно разобрано!");
+        showToast("🤖 Сообщение успешно разобрано! Блюда добавлены в корзину");
       } else {
         showToast("⚠️ Ошибка: " + (resData?.error || "ИИ не распознал текст"));
       }
