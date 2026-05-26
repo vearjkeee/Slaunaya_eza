@@ -42,6 +42,20 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     --hint:      #8e8e93;
     --border:    rgba(255,255,255,0.15);
     --shadow:    0 1px 4px rgba(0,0,0,0.3);
+    
+    /* Мягкие контрастные цвета для темной темы во избежание ослепления */
+    --s-new-l:   rgba(10,132,255,0.15); --s-new: #0a84ff;
+    --s-conf-l:  rgba(48,209,88,0.15);  --s-conf: #30d158;
+    --s-cook-l:  rgba(255,159,10,0.15); --s-cook: #ff9f0a;
+    --s-done-l:  rgba(142,142,147,0.15);--s-done: #8e8e93;
+    --s-canc-l:  rgba(255,69,58,0.15);  --s-canc: #ff453a;
+    --urgent:    #ff453a;
+    --soon:      #ff9f0a;
+    --acc-l:     rgba(216,90,48,0.15);
+  }
+  
+  .scroll::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.2);
   }
 }
 
