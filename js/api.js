@@ -18,7 +18,27 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/Slaunaya_eza/sw.js')
-      .then(reg => console.log('[SW] registered, scope:', reg.scope))
+      .then(reg => {
+        console.log('[SW] registered, scope:', reg.scope);
+        
+        // Проверяем наличие обновлений кода в фоне
+        reg.onupdatefound = () => {
+          const installingWorker = reg.installing;
+          installingWorker.onstatechange = () => {
+            if (installingWorker.state === 'installed') {
+              if (navigator.serviceWorker.controller) {
+                // Если новая версия скачалась, уведомляем и мягко перезагружаем страницу
+                if (typeof showToast === 'function') {
+                  showToast("✨ Приложение обновлено до новой версии!");
+                }
+                setTimeout(() => {
+                  window.location.reload();
+                }, 1500);
+              }
+            }
+          };
+        };
+      })
       .catch(err => console.warn('[SW] registration failed:', err));
   });
 }
