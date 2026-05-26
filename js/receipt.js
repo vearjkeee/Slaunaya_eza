@@ -6,7 +6,7 @@
 // ══════════════════════════════════════════════════════════
 
 const RECEIPT_CARD   = "1090081048967";
-const RECEIPT_LOGO   = "icons/logo.png";
+const RECEIPT_LOGO   = "icons/logo.png"; // Приведено к единому стандарту PNG
 
 // Коэффициенты перевода ReportLab (points)
 const PT_MM = 2.834645; // 1 мм в пунктах
@@ -93,11 +93,16 @@ async function receiptSave() {
 async function receiptShare() {
   if (!_receiptBlob) return;
   const file = new File([_receiptBlob], _receiptFilename, { type: "image/jpeg" });
+  
+  // Добавление текстового описания заказа при отправке файла
+  const order = findOrder(currentOrderRow);
+  const totalText = order ? `Ваш предчек от Slaŭnaya Eža на сумму ${parseFloat(order.total || 0).toFixed(2)} BYN` : "Предчек — Slaŭnaya Eža";
 
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
         title: "Предчек — Slaŭnaya Eža",
+        text: totalText,
         files: [file],
       });
     } catch (e) {
