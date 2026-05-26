@@ -4,12 +4,24 @@
 // Telegram убран: свайп "Выполнен" → changeStatus() → GAS
 // ══════════════════════════════════════════════════════════
 
-// ── Парсинг даты "дд.мм.гггг" → число 20260522 ───────────
+// ── Парсинг даты "дд.мм.гггг" или ISO "гггг-мм-дд" → число 20260522 ───────────
 function parseDateNum(d) {
   if (!d) return 0;
-  const p = d.split(".");
-  if (p.length === 3) return parseInt(p[2] + p[1] + p[0], 10);
-  if (p.length === 2) return parseInt(new Date().getFullYear() + p[1] + p[0], 10);
+  let p;
+  if (d.includes("-")) {
+    p = d.split("-");
+    if (p.length === 3) {
+      return parseInt(p[0] + p[1].padStart(2, "0") + p[2].padStart(2, "0"), 10);
+    }
+  } else if (d.includes(".")) {
+    p = d.split(".");
+    if (p.length === 3) {
+      return parseInt(p[2] + p[1].padStart(2, "0") + p[0].padStart(2, "0"), 10);
+    }
+    if (p.length === 2) {
+      return parseInt(new Date().getFullYear() + p[1].padStart(2, "0") + p[0].padStart(2, "0"), 10);
+    }
+  }
   return 0;
 }
 
