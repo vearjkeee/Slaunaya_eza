@@ -43,6 +43,9 @@ const STATE_KEY           = 'slaunaya_screen_state_v2';
 const DRAFT_KEY           = 'order_draft_v1';
 const SHOPPING_BOUGHT_KEY = 'shopping_bought_v1';
 
+// Переменная времени для ловушки кнопки «Назад»
+let lastBackPress = 0;
+
 // ══════════════════════════════════════════════════════════
 // ЛОКАЛЬНЫЙ КЭШ
 // ══════════════════════════════════════════════════════════
@@ -258,7 +261,7 @@ async function forceReload() {
 }
 
 // ══════════════════════════════════════════════════════════
-// НАВИГАЦИЯ
+// НАВИГАЦИЯ & СИНХРОНИЗАЦИЯ С HISTORY API
 // ══════════════════════════════════════════════════════════
 function tabRoots() {
   return { orders:'s-orders', new:'s-new-details', shopping:'s-shopping', dashboard:'s-dashboard', menu:'s-menu' };
@@ -267,6 +270,10 @@ function tabRoots() {
 function switchTab(tab, btn) {
   screenStack = [];
   currentTab  = tab;
+  
+  // Обновляем текущее состояние истории браузера без накопления лишних переходов между табами
+  window.history.replaceState({ tab: tab, stackLength: 0 }, '');
+
   document.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
   document.querySelectorAll('.scr').forEach(s => {
@@ -308,6 +315,10 @@ function pushScreen(id) {
   const cur = document.querySelector('.scr.on');
   if (cur) { cur.classList.remove('on'); cur.classList.add('back'); }
   screenStack.push(cur ? cur.id : tabRoots()[currentTab]);
+  
+  // Добавляем реальную запись в историю браузера при открытии нового экрана
+  window.history.pushState({ tab: currentTab, stackLength: screenStack.length }, '');
+
   const next = document.getElementById(id);
   next.style.transform = 'translateX(100%)';
   next.classList.remove('back');
@@ -318,17 +329,50 @@ function pushScreen(id) {
   saveLastScreen();
 }
 
+// Теперь goBack() только инициирует движение назад по истории,
+// а фактический сдвиг экранов происходит в слушателе popstate
 function goBack() {
-  if (!screenStack.length) return;
-  const prev   = screenStack.pop();
-  const cur    = document.querySelector('.scr.on');
-  if (cur) { cur.classList.remove('on'); cur.style.transform = 'translateX(100%)'; }
-  const prevEl = document.getElementById(prev);
-  prevEl.classList.remove('back');
-  prevEl.classList.add('on');
-  updateBackButtonVisibility();
-  saveLastScreen();
+  if (screenStack.length > 0) {
+    window.history.back();
+  }
 }
+
+// Слушатель событий истории — осуществляет переходы по кнопке назад
+window.addEventListener('popstate', (event) => {
+  const state = event.state;
+  const targetStackLength = (state && typeof state.stackLength === 'number') ? state.stackLength : 0;
+
+  if (screenStack.length > targetStackLength) {
+    // Пользователь вернулся на шаг назад в истории
+    while (screenStack.length > targetStackLength) {
+      const prev = screenStack.pop();
+      const cur = document.querySelector('.scr.on');
+      if (cur) {
+        cur.classList.remove('on');
+        cur.style.transform = 'translateX(100%)';
+      }
+      const prevEl = document.getElementById(prev);
+      if (prevEl) {
+        prevEl.classList.remove('back');
+        prevEl.classList.add('on');
+      }
+    }
+    updateBackButtonVisibility();
+    saveLastScreen();
+  } else if (state && state.rootBackIntercept) {
+    // Сработала ловушка закрытия на главном экране
+    const now = Date.now();
+    if (now - lastBackPress < 2000) {
+      // Пользователь нажал второй раз в течение 2 сек -> выходим/сворачиваем
+      window.history.back();
+    } else {
+      lastBackPress = now;
+      showToast('Для закрытия приложения еще раз нажмите "Назад"');
+      // Возвращаем состояние ловушки на стек
+      window.history.pushState({ tab: currentTab, stackLength: 0 }, '');
+    }
+  }
+});
 
 function renderCurrentTab() {
   if (currentTab === 'orders')    renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
@@ -775,7 +819,8 @@ function renderCartFull() {
   const sv    = document.getElementById('sv-btn');
 
   if (!keys.length) {
-    empty.style.display = 'flex';
+    empty.style.display = 'none'; // Изменено с flex для исключения артефактов при пустом рендере
+    empty.setAttribute("style", "display: flex;");
     items.innerHTML     = '';
     if (noteW) noteW.style.display = 'none';
     sv.disabled = true;
@@ -902,11 +947,21 @@ function chCartQ(id, d) {
   saveDraft(); updCart();
 }
 
+// Корректное удаление товара из корзины при вводе 0 вручную
 function chCartQInput(id, val) {
   if (!cart[id]) return;
   let q = parseFloat(val);
   if (isNaN(q) || q < 0) q = 0;
   cart[id].q = Math.round(q * 100) / 100;
+
+  if (cart[id].q <= 0) {
+    delete cart[id];
+    cartOrder = cartOrder.filter(k => k !== id);
+    saveDraft();
+    renderCartFull();
+    return;
+  }
+
   const t = document.getElementById('cit-' + id);
   if (t) t.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
   saveDraft(); updCart();
@@ -929,7 +984,7 @@ function updCart() {
   const discEl = document.getElementById('c-discount');
   if (discEl) draftDiscount = parseFloat(discEl.value) || 0;
 
-  const disc  = draftDiscount;
+  const disc = draftDiscount;
   const discA = sub * disc / 100;
   const deliv = delivType === 'Доставка' ? (parseFloat(document.getElementById('o-dcost')?.value) || 0) : 0;
   const total = sub - discA + deliv;
@@ -998,13 +1053,19 @@ async function saveOrder() {
   const result = await sendActionToGAS(payload);
 
   if (result) {
+    const isEditing = !!editingRow;
     clearDraft();
-    showToast(editingRow ? '✓ Заказ обновлён' : '✓ Заказ создан');
+    
+    // Полное освобождение памяти от сохраненного/измененного заказа
+    cart = {};
+    cartOrder = [];
+    editingRow = null;
+
+    showToast(isEditing ? '✓ Заказ обновлён' : '✓ Заказ создан');
     // Переходим на вкладку заказов
     const ordersBtn = document.querySelector('.tab-bar .tb:nth-child(1)');
     switchTab('orders', ordersBtn);
   }
-  // Если result null — sendActionToGAS уже показал toast с ошибкой
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1071,10 +1132,20 @@ function _showAmountDialog(count) {
   setTimeout(() => document.getElementById('sh-amount-input')?.focus(), 200);
 }
 
+// Подтверждение закупки с автоматическим удалением ID из LocalStorage
 async function _submitConfirmedPurchase() {
   closeModal();
   const amount    = parseFloat(document.getElementById('sh-amount-input')?.value || '') || null;
   const boughtIds = (SHOPPING || []).filter(i => i.bought).map(i => i.id);
+  
+  try {
+    const boughtMap = JSON.parse(localStorage.getItem(SHOPPING_BOUGHT_KEY) || '{}');
+    boughtIds.forEach(id => delete boughtMap[id]);
+    localStorage.setItem(SHOPPING_BOUGHT_KEY, JSON.stringify(boughtMap));
+  } catch (e) {
+    console.warn("[shopping] Ошибка очистки локального кэша закупки", e);
+  }
+
   SHOPPING = SHOPPING.filter(i => !i.bought);
   renderShopping(SHOPPING);
   updateAllBadges();
@@ -1087,6 +1158,7 @@ function clearAllShopping() {
   showConfirm('Очистить всё', `Удалить все ${SHOPPING.length} позиций из списка закупок?`, 'Удалить всё',
     async () => {
       SHOPPING = [];
+      localStorage.removeItem(SHOPPING_BOUGHT_KEY); // Полная очистка состояния закупки в localStorage
       renderShopping(SHOPPING);
       updateAllBadges();
       await sendActionToGAS({ action: 'shopping_clear_all' });
@@ -1322,6 +1394,12 @@ function handleURLParams() {
 // ИНИЦИАЛИЗАЦИЯ
 // ══════════════════════════════════════════════════════════
 async function init() {
+  // Инициализация состояний History API при первой загрузке
+  if (window.history.state === null) {
+    window.history.replaceState({ rootBackIntercept: true }, '');
+    window.history.pushState({ tab: currentTab, stackLength: 0 }, '');
+  }
+
   // Пробуем показать приложение из локального кэша немедленно
   const cachedTime  = loadLocalCache();
   const hasLocalData = MENU.length > 0 || ACTIVE_ORDERS.length > 0;
