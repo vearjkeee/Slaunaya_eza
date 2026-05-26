@@ -1,16 +1,21 @@
 'use strict';
 // ══════════════════════════════════════════════════════════
-// receipt.js — генератор предчека
-// Рисует предчек на <canvas>, показывает как JPG в модальном
-// окне. Кнопки: Сохранить (в галерею/загрузки), Поделиться.
-// Воспроизводит логику receipt_pdf.py на стороне браузера.
+// receipt.js — Генератор предчека (Рендеринг под оригинал PDF)
+// Точное соответствие шрифтов, цветов, двухколоночной верстки и размеров из receipt_pdf.py.
+// Рендерится в высоком разрешении (High-DPI / 300 DPI)
 // ══════════════════════════════════════════════════════════
 
-// ── Реквизиты ─────────────────────────────────────────────
 const RECEIPT_CARD   = "1090081048967";
-const RECEIPT_LOGO   = "icons/logo.jpg";
+const RECEIPT_LOGO   = "icons/logo.png";
 
-// ── Цвета (повторяют receipt_pdf.py) ─────────────────────
+// Коэффициенты перевода ReportLab (points)
+const PT_MM = 2.834645; // 1 мм в пунктах
+const W     = 595.27;    // Ширина A4 в пунктах
+const ML    = 14 * PT_MM; // Поля слева (39.68pt)
+const MR    = 14 * PT_MM; // Поля справа
+const CW    = W - ML - MR; // Ширина контента (515.9pt)
+
+// Оригинальная палитра цветов из receipt_pdf.py
 const RC = {
   ink:     "#1A1A1A",
   dark:    "#3D3D3D",
@@ -20,30 +25,27 @@ const RC = {
   accent:  "#D85A30",
   accentL: "#FDF1EC",
   white:   "#FFFFFF",
-  labelBg: "#F0F0F0",
+  labelBg: "#F2F2F2",
   discBg:  "#FFF0F0",
   discFg:  "#C62828",
   delivBg: "#F2F2F2",
 };
 
-// Текущий blob предчека — используется кнопками Сохранить/Поделиться
 let _receiptBlob = null;
 let _receiptFilename = "предчек.jpg";
 
 // ══════════════════════════════════════════════════════════
-// ТОЧКА ВХОДА — вызывается из render.js / app.js
+// ТОЧКА ВХОДА — Открытие модального окна
 // ══════════════════════════════════════════════════════════
 async function showReceiptModal(row) {
   const order = findOrder(row);
   if (!order) { showToast("Заказ не найден"); return; }
 
-  // Показываем модал сразу со спиннером
   const modal = document.getElementById("receipt-modal");
   const body  = document.getElementById("receipt-modal-body");
-  body.innerHTML = `<div class="receipt-spinner"><div class="spin"></div><div style="margin-top:12px;color:var(--hint);font-size:13px">Генерируем предчек…</div></div>`;
+  body.innerHTML = `<div class="receipt-spinner"><div class="spin"></div><div style="margin-top:12px;color:var(--hint);font-size:13px">Генерируем предчек высокого качества…</div></div>`;
   modal.classList.add("on");
 
-  // Блокируем кнопки пока не готово
   document.getElementById("rb-save").disabled  = true;
   document.getElementById("rb-share").disabled = true;
 
@@ -70,13 +72,11 @@ async function showReceiptModal(row) {
 function closeReceiptModal() {
   const modal = document.getElementById("receipt-modal");
   modal.classList.remove("on");
-  // Освобождаем blob URL
   const img = document.getElementById("receipt-img");
   if (img && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
   _receiptBlob = null;
 }
 
-// ── Сохранить в галерею / загрузки ────────────────────────
 async function receiptSave() {
   if (!_receiptBlob) return;
   const url = URL.createObjectURL(_receiptBlob);
@@ -90,7 +90,6 @@ async function receiptSave() {
   showToast("✓ Предчек сохранён");
 }
 
-// ── Поделиться через Web Share API ───────────────────────
 async function receiptShare() {
   if (!_receiptBlob) return;
   const file = new File([_receiptBlob], _receiptFilename, { type: "image/jpeg" });
@@ -105,277 +104,291 @@ async function receiptShare() {
       if (e.name !== "AbortError") showToast("⚠️ Не удалось поделиться");
     }
   } else {
-    // Fallback — скачать
     await receiptSave();
     showToast("Поделиться недоступно — файл сохранён");
   }
 }
 
 // ══════════════════════════════════════════════════════════
-// ГЕНЕРАЦИЯ ПРЕДЧЕКА НА CANVAS → BLOB
+// ГЕНЕРАЦИЯ ВЫСОКОГО РАЗРЕШЕНИЯ (High-DPI / 3x Scale)
 // ══════════════════════════════════════════════════════════
 async function generateReceiptBlob(order) {
-  // Загружаем логотип заранее
   const logo = await _loadImage(RECEIPT_LOGO).catch(() => null);
 
-  // Создаём измерительный canvas для подсчёта высоты
+  // Измерительный холст (работает в оригинальных поинтах)
   const measureCanvas  = document.createElement("canvas");
-  measureCanvas.width  = 794; // ~A4 width at 96dpi
+  measureCanvas.width  = W;
   const mCtx = measureCanvas.getContext("2d");
 
-  const W  = measureCanvas.width;
-  const ML = 40;
-  const MR = 40;
-  const CW = W - ML - MR;
+  // Замеряем итоговую высоту контента
+  const usedH = _drawReceipt(mCtx, order, logo, 10000);
+  const realLogicalH = Math.max(usedH + 10, 841.89); // Минимальная высота — стандартный A4 лист
 
-  // Считаем высоту — рисуем на dummy canvas высотой 10000px
-  measureCanvas.height = 10000;
-  const usedH = _drawReceipt(mCtx, order, logo, W, ML, MR, CW, 10000);
-
-  // Реальная высота — не меньше A4 (1123px при 96dpi)
-  const realH = Math.max(usedH + 20, 1123);
-
-  // Финальный canvas
+  // Результирующий холст с коэффициентом резкости 3x (300 DPI)
+  const SCALE = 3; 
   const canvas   = document.createElement("canvas");
-  canvas.width   = W;
-  canvas.height  = realH;
+  canvas.width   = Math.round(W * SCALE);
+  canvas.height  = Math.round(realLogicalH * SCALE);
   const ctx = canvas.getContext("2d");
 
-  // Белый фон
+  // Масштабируем контекст, чтобы писать код в исходных ReportLab-координатах
+  ctx.scale(SCALE, SCALE);
+
+  // Заливка белым фоном
   ctx.fillStyle = RC.white;
-  ctx.fillRect(0, 0, W, realH);
+  ctx.fillRect(0, 0, W, realLogicalH);
 
-  _drawReceipt(ctx, order, logo, W, ML, MR, CW, realH);
+  _drawReceipt(ctx, order, logo, realLogicalH);
 
-  // Конвертируем в blob
   return new Promise(resolve => {
-    canvas.toBlob(blob => resolve(blob), "image/jpeg", 0.92);
+    canvas.toBlob(blob => resolve(blob), "image/jpeg", 0.95);
   });
 }
 
 // ══════════════════════════════════════════════════════════
-// РИСОВАНИЕ — основная функция
-// Возвращает Y-позицию после последнего элемента (для измерения высоты)
+// СИНХРОННАЯ ОТРИСОВКА ЧЕКА (Сверху вниз)
 // ══════════════════════════════════════════════════════════
-function _drawReceipt(ctx, order, logo, W, ML, MR, CW, canvasH) {
-  let y = 20; // отступ сверху
+function _drawReceipt(ctx, order, logo, canvasH) {
+  let y = 14 * PT_MM; // Стартовый отступ сверху
 
-  // ── ЛОГОТИП / ШАПКА ──────────────────────────────────
+  // ── 1. ЛОГОТИП ИЛИ ШАПКА ТЕКСТОМ ──
   if (logo) {
-    const logoH = 130;
+    const logoH = 52 * PT_MM;
     const logoW = logoH * (logo.width / logo.height);
     ctx.drawImage(logo, (W - logoW) / 2, y, logoW, logoH);
-    y += logoH + 10;
+    y += logoH + 4 * PT_MM;
   } else {
     ctx.fillStyle = RC.ink;
-    ctx.font = "bold 28px serif";
+    ctx.font = "bold 22pt Georgia, serif";
     ctx.textAlign = "center";
-    ctx.fillText("Slaŭnaya Eža", W / 2, y + 28);
-    y += 38;
+    ctx.fillText("Slaŭnaya eža", W / 2, y + 22);
+    y += 29;
     ctx.fillStyle = RC.hint;
-    ctx.font = "14px sans-serif";
+    ctx.font = "8pt sans-serif";
     ctx.fillText("cooking with love", W / 2, y);
-    y += 20;
+    y += 12;
   }
   ctx.textAlign = "left";
 
-  // Линия под шапкой
-  _hline(ctx, ML, y, W - MR, RC.ink, 2);
-  y += 14;
+  _hline(ctx, ML, y, W - MR, RC.ink, 0.8);
+  y += 5 * PT_MM;
 
-  // ── БЛОК КЛИЕНТА ─────────────────────────────────────
-  const LROW_H = 20; // высота строки-лейбла
-  const VROW_H = 34; // высота строки-значения
-
-  // Дата создания предчека
+  // Информационная плашка даты и статуса документа
+  ctx.fillStyle = RC.dark;
+  ctx.font = "7.5pt sans-serif";
   const today = new Date();
   const dateStr = [
-    String(today.getDate()).padStart(2,"0"),
-    String(today.getMonth()+1).padStart(2,"0"),
+    String(today.getDate()).padStart(2, "0"),
+    String(today.getMonth() + 1).padStart(2, "0"),
     today.getFullYear()
-  ].join(".") + " " + String(today.getHours()).padStart(2,"0") + ":" + String(today.getMinutes()).padStart(2,"0");
+  ].join(".");
+  ctx.fillText(dateStr, ML, y);
+  ctx.textAlign = "right";
+  ctx.fillText("ПРЕДЧЕК · ПРЕДВАРИТЕЛЬНЫЙ СЧЁТ", W - MR, y);
+  ctx.textAlign = "left";
+  y += 8 * PT_MM;
 
-  y = _infoRow(ctx, ML, y, CW, LROW_H, VROW_H, "ДАТА ПРЕДЧЕКА", dateStr);
-  y = _infoRow(ctx, ML, y, CW, LROW_H, VROW_H, "КЛИЕНТ",        order.client || "—");
+  // ── 2. БЛОК КЛИЕНТА (ОРИГИНАЛЬНАЯ ВЕРСТКА В ДВА СТОЛБЦА) ──
+  const eventDate = order.event_date || "";
+  const eventTime = order.event_time || "";
+  const eventStr  = eventDate + (eventTime ? " в " + eventTime : "");
 
-  const eventStr = (order.event_date || "—") + (order.event_time ? " в " + order.event_time : "");
-  y = _infoRow(ctx, ML, y, CW, LROW_H, VROW_H, "ДАТА МЕРОПРИЯТИЯ", eventStr);
+  y = _clientRow(ctx, "Клиент", order.client || "—", "Способ связи", order.contact || "—", y);
+  y = _clientRow(ctx, "Дата доставки", eventStr, "Способ получения", order.delivery_type || "Самовывоз", y);
 
-  if (order.delivery_type === "Доставка") {
-    y = _infoRow(ctx, ML, y, CW, LROW_H, VROW_H, "СПОСОБ ПОЛУЧЕНИЯ", "Доставка");
-    if (order.address) {
-      y = _infoRowMultiline(ctx, ML, y, CW, LROW_H, "АДРЕС", order.address);
-    }
-  } else {
-    y = _infoRow(ctx, ML, y, CW, LROW_H, VROW_H, "СПОСОБ ПОЛУЧЕНИЯ", "Самовывоз");
+  // Поле Адреса (на всю ширину с динамическим переносом строк)
+  const addr = (order.delivery_type === "Самовывоз") ? "Самовывоз" : (order.address || "—");
+  y = _clientRowMultiline(ctx, "АДРЕС", addr, y, 9.5);
+
+  // Примечание (если есть)
+  const note = (order.note || "").trim();
+  if (note) {
+    y = _clientRowMultiline(ctx, "ПРИМЕЧАНИЕ", note, y, 9.0);
   }
 
-  if (order.note && order.note.trim()) {
-    y = _infoRowMultiline(ctx, ML, y, CW, LROW_H, "ПРИМЕЧАНИЕ", order.note.trim());
-  }
+  y += 3 * PT_MM;
+  _hline(ctx, ML, y, W - MR, RC.ink, 0.8);
+  y += 7 * PT_MM;
 
-  y += 8;
-  _hline(ctx, ML, y, W - MR, RC.ink, 2);
-  y += 16;
+  // ── 3. ТАБЛИЦА БЛЮД ──
+  const thH = 6.5 * PT_MM;
+  const pad = 2 * PT_MM;
+  
+  // Координаты колонок в поинтах
+  const cSumR   = ML + CW;
+  const cPriceR = cSumR - 24 * PT_MM;
+  const cQtyR   = cPriceR - 20 * PT_MM;
+  const nameW   = cQtyR - ML - pad - 16 * PT_MM;
 
-  // ── ТАБЛИЦА БЛЮД ─────────────────────────────────────
-  const C_SUM_R   = ML + CW;
-  const C_PRICE_R = C_SUM_R   - 80;
-  const C_QTY_R   = C_PRICE_R - 72;
-  const NAME_W    = C_QTY_R   - ML - 8 - 40;
-
-  // Заголовок таблицы
   ctx.fillStyle = RC.dark;
-  ctx.font = "bold 11px sans-serif";
-  ctx.fillText("НАИМЕНОВАНИЕ",      ML + 4,      y + 13);
-  _rtxt(ctx, "КОЛ-ВО",  C_QTY_R,   y + 13, "bold 11px sans-serif", RC.dark);
-  _rtxt(ctx, "ЦЕНА",    C_PRICE_R,  y + 13, "bold 11px sans-serif", RC.dark);
-  _rtxt(ctx, "СУММА",   C_SUM_R,    y + 13, "bold 11px sans-serif", RC.dark);
-  y += 18;
-  _hline(ctx, ML, y, W - MR, RC.ink, 1);
-  y += 2;
+  ctx.font = "bold 8.5pt sans-serif";
+  ctx.fillText("НАИМЕНОВАНИЕ", ML + pad, y + thH * 0.6);
+  _rtxt(ctx, "КОЛ-ВО", cQtyR, y + thH * 0.6, "bold 8.5pt sans-serif", RC.dark);
+  _rtxt(ctx, "ЦЕНА", cPriceR, y + thH * 0.6, "bold 8.5pt sans-serif", RC.dark);
+  _rtxt(ctx, "СУММА", cSumR, y + thH * 0.6, "bold 8.5pt sans-serif", RC.dark);
+  
+  _hairline(ctx, ML, y + thH, W - MR, 0.6, RC.ink);
+  y += thH + 1;
 
-  const dishes   = order.dishes || [];
-  let   subtotal = 0;
+  const dishes = order.dishes || [];
+  let subtotal = 0;
 
   dishes.forEach((dish, i) => {
-    const name  = dish.name  || "";
-    const unit  = dish.unit  || "шт";
-    const qty   = parseFloat(dish.qty)   || 1;
+    const name  = dish.name || "";
+    const unit  = dish.unit || "шт";
+    const qty   = parseFloat(dish.qty) || 1;
     const price = parseFloat(dish.price) || 0;
-    const lineT = qty * price;
-    subtotal   += lineT;
+    const lineTotal = qty * price;
+    subtotal += lineTotal;
 
-    const nameLines = _wrapText(ctx, name, "13px sans-serif", NAME_W);
-    const ROW_H = Math.max(34, nameLines.length * 18 + 10);
+    const nameLines = _wrapText(ctx, name, "9.5pt sans-serif", nameW);
+    const nLines    = nameLines.length;
+    const rowH      = Math.max(7 * PT_MM, nLines * 4.8 * PT_MM + 2 * PT_MM);
 
-    // Чередование фона
-    ctx.fillStyle = i % 2 === 0 ? RC.rowAlt : RC.white;
-    ctx.fillRect(ML, y, CW, ROW_H);
+    // Чередование строк таблицы
+    ctx.fillStyle = (i % 2 === 0) ? RC.rowAlt : RC.white;
+    ctx.fillRect(ML, y, CW, rowH);
 
-    // Название (возможно многострочное)
+    // Вертикальное центрирование многострочного наименования
+    const textBlockH = nLines * 4.8 * PT_MM;
+    const textTop = y + (rowH - textBlockH) / 2 + 4.8 * PT_MM * 0.72;
     ctx.fillStyle = RC.ink;
-    ctx.font = "13px sans-serif";
-    const textTop = y + (ROW_H - nameLines.length * 18) / 2 + 14;
-    nameLines.forEach((ln, li) => ctx.fillText(ln, ML + 4, textTop + li * 18));
+    ctx.font = "9.5pt sans-serif";
+    ctx.textAlign = "left";
+    nameLines.forEach((ln, li) => {
+      ctx.fillText(ln, ML + pad, textTop + li * 4.8 * PT_MM);
+    });
 
-    // Кол-во, цена, сумма
-    const midY = y + ROW_H / 2 + 5;
+    // Отрисовка количеств, цены и сумм
+    const midY = y + rowH / 2;
+    ctx.textBaseline = "middle";
+    
     const qtyStr = (qty === Math.floor(qty)) ? String(Math.floor(qty)) : String(qty);
-    _rtxt(ctx, `${qtyStr} ${unit}`,       C_QTY_R,   midY, "12px sans-serif",      RC.dark);
-    _rtxt(ctx, price.toFixed(2),           C_PRICE_R, midY, "12px sans-serif",      RC.dark);
-    _rtxt(ctx, lineT.toFixed(2),           C_SUM_R,   midY, "bold 12px sans-serif", RC.ink);
-
-    y += ROW_H;
+    _rtxt(ctx, `${qtyStr} ${unit}`, cQtyR, midY, "9pt sans-serif", RC.dark);
+    _rtxt(ctx, price.toFixed(2), cPriceR, midY, "9pt sans-serif", RC.dark);
+    _rtxt(ctx, lineTotal.toFixed(2), cSumR, midY, "bold 9pt sans-serif", RC.ink);
+    
+    ctx.textBaseline = "alphabetic";
+    y += rowH;
   });
 
-  _hline(ctx, ML, y, W - MR, RC.ink, 1);
-  y += 8;
+  _hairline(ctx, ML, y, W - MR, 0.4, RC.ink);
+  y += 3 * PT_MM;
 
-  // ── ИТОГОВЫЕ СТРОКИ ───────────────────────────────────
-  y = _sumRow(ctx, ML, CW, y, "Итого по блюдам:", subtotal.toFixed(2) + " BYN", true);
+  // ── 4. ИТОГИ ──
+  _sumRow(ctx, "Итого по блюдам:", subtotal.toFixed(2) + " BYN", cPriceR, cSumR, y, true);
+  y += 7 * PT_MM;
 
   const discP = parseFloat(order.discount_percent) || 0;
   const discA = parseFloat(order.discount_amount)  || (discP > 0 ? subtotal * discP / 100 : 0);
   if (discP > 0) {
     ctx.fillStyle = RC.discBg;
-    ctx.fillRect(ML, y, CW, 28);
-    y = _sumRow(ctx, ML, CW, y, `Скидка ${discP}%:`, "−" + discA.toFixed(2) + " BYN", false, RC.discFg);
+    ctx.fillRect(ML, y, CW, 7 * PT_MM);
+    _sumRow(ctx, `Скидка ${discP}%:`, `−${discA.toFixed(2)} BYN`, cPriceR, cSumR, y, false, RC.discFg);
+    y += 7 * PT_MM;
   }
 
   const delivery = parseFloat(order.delivery) || 0;
   if (delivery > 0) {
     ctx.fillStyle = RC.delivBg;
-    ctx.fillRect(ML, y, CW, 28);
-    y = _sumRow(ctx, ML, CW, y, "Доставка:", delivery.toFixed(2) + " BYN");
+    ctx.fillRect(ML, y, CW, 7 * PT_MM);
+    _sumRow(ctx, "Доставка:", delivery.toFixed(2) + " BYN", cPriceR, cSumR, y);
+    y += 7 * PT_MM;
   }
 
-  y += 6;
+  y += 2 * PT_MM;
 
-  // Оранжевый блок ИТОГО
-  const total  = parseFloat(order.total) || (subtotal + delivery - discA);
-  const TOTAL_H = 44;
-  _roundRect(ctx, ML, y, CW, TOTAL_H, 6, RC.accent);
+  // Главный оранжевый прямоугольник «ИТОГО К ОПЛАТЕ»
+  const total   = parseFloat(order.total) || (subtotal + delivery - discA);
+  const prepay  = total / 2;
+  const totalH  = 14 * PT_MM;
+
+  _roundRect(ctx, ML, y, CW, totalH, 2 * PT_MM, RC.accent);
+
   ctx.fillStyle = RC.white;
-  ctx.font = "bold 14px sans-serif";
-  ctx.fillText("ИТОГО К ОПЛАТЕ", ML + 12, y + TOTAL_H * 0.6);
-  ctx.font = "bold 20px sans-serif";
-  _rtxt(ctx, total.toFixed(2) + " BYN", W - MR, y + TOTAL_H * 0.6, "bold 20px sans-serif", RC.white);
-  y += TOTAL_H + 14;
+  ctx.font = "bold 10pt sans-serif";
+  ctx.textBaseline = "middle";
+  ctx.fillText("ИТОГО К ОПЛАТЕ", ML + 4 * PT_MM, y + totalH / 2);
+  _rtxt(ctx, total.toFixed(2) + " BYN", W - MR, y + totalH / 2, "bold 15pt sans-serif", RC.white);
+  ctx.textBaseline = "alphabetic";
+  
+  y += totalH + 5 * PT_MM;
 
-  // ── БЛОК ОПЛАТЫ ───────────────────────────────────────
-  _hline(ctx, ML, y, W - MR, RC.rule, 1);
-  y += 12;
+  // ── 5. БЛОК ОПЛАТЫ ──
+  _hairline(ctx, ML, y, W - MR, 0.4, RC.rule);
+  y += 6 * PT_MM;
 
-  // Пилюля-лейбл ОПЛАТА
-  _pill(ctx, ML, y, "ОПЛАТА");
-  y += 28;
+  y = _drawPillLabel(ctx, ML, y, "ОПЛАТА");
+  y += 10 * PT_MM;
 
-  const prepay = order.prepayment !== false;
   ctx.fillStyle = RC.ink;
-  ctx.font = "13px sans-serif";
-  if (prepay) {
-    const prepaySum = (total / 2).toFixed(2);
-    ctx.fillText(`Работа по предоплате — не менее 50% (${prepaySum} BYN).`, ML, y);
-    y += 20;
+  ctx.font = "9.2pt sans-serif";
+
+  const hasPrepay = order.prepayment !== false;
+  if (hasPrepay) {
+    ctx.fillText(`Работа по предоплате — не менее 50% (${prepay.toFixed(2)} BYN).`, ML, y);
+    y += 5.5 * PT_MM;
     ctx.fillText("Заказ подтверждается после поступления предоплаты.", ML, y);
-    y += 28;
+    y += 9 * PT_MM;
   } else {
     ctx.fillText("Оплата по факту доставки — наличными или переводом.", ML, y);
-    y += 28;
+    y += 9 * PT_MM;
   }
 
   // Блок ЕРИП
-  _pill(ctx, ML, y, "КАК ОПЛАТИТЬ ЧЕРЕЗ ЕРИП");
-  y += 28;
+  y = _drawPillLabel(ctx, ML, y, "КАК ОПЛАТИТЬ ЧЕРЕЗ ЕРИП");
+  y += 10 * PT_MM;
 
   const eripSteps = [
     "1. Банковские, финансовые услуги",
     "2. Банки, НКФО  →  Приорбанк",
     "3. Пополнение карты",
   ];
-  ctx.font = "13px sans-serif";
+  ctx.font = "9pt sans-serif";
   ctx.fillStyle = RC.ink;
   eripSteps.forEach(step => {
     ctx.fillText(step, ML, y);
-    y += 20;
+    y += 5.5 * PT_MM;
   });
 
-  // Строка с номером карты (жирный + подчёркивание)
+  // Строка пополнения номера карты (жирный + подчёркивание в стиле ReportLab)
   const prefix = "4. Номер карты:  ";
-  ctx.font = "13px sans-serif";
-  ctx.fillStyle = RC.ink;
+  ctx.font = "9pt sans-serif";
   ctx.fillText(prefix, ML, y);
-  const prefW = ctx.measureText(prefix).width;
-  ctx.font = "bold 13px sans-serif";
-  ctx.fillText(RECEIPT_CARD, ML + prefW, y);
+  const prefixW = ctx.measureText(prefix).width;
+
+  ctx.font = "bold 9.5pt sans-serif";
+  ctx.fillText(RECEIPT_CARD, ML + prefixW, y);
   const cardW = ctx.measureText(RECEIPT_CARD).width;
+
   ctx.strokeStyle = RC.ink;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 0.5;
   ctx.beginPath();
-  ctx.moveTo(ML + prefW, y + 2);
-  ctx.lineTo(ML + prefW + cardW, y + 2);
+  ctx.moveTo(ML + prefixW, y + 1.5);
+  ctx.lineTo(ML + prefixW + cardW, y + 1.5);
   ctx.stroke();
-  y += 30;
 
-  // ── ФУТЕР ────────────────────────────────────────────
-  _hline(ctx, ML, y, W - MR, RC.rule, 1);
-  y += 16;
+  y += 8 * PT_MM;
+
+  // ── 6. ПОДВАЛ ──
+  y += 5 * PT_MM;
+  _hairline(ctx, ML, y, W - MR, 0.4, RC.rule);
+  y += 6 * PT_MM;
+
   ctx.fillStyle = RC.dark;
-  ctx.font = "12px sans-serif";
+  ctx.font = "8pt sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("Slaŭnaya Eža  ·  cooking with love  ·  Дзякуй за ваш заказ!", W / 2, y);
+  ctx.fillText("Slaŭnaya eža  ·  cooking with love  ·  Дзякуй за ваш заказ!", W / 2, y);
   ctx.textAlign = "left";
-  y += 24;
+  y += 10 * PT_MM;
 
-  return y; // возвращаем итоговую Y для измерения высоты
+  return y;
 }
 
 // ══════════════════════════════════════════════════════════
-// ВСПОМОГАТЕЛЬНЫЕ ПРИМИТИВЫ CANVAS
+// ВСПОМОГАТЕЛЬНЫЕ РИСОВАТЕЛЬНЫЕ ФУНКЦИИ
 // ══════════════════════════════════════════════════════════
 
-// Горизонтальная линия
 function _hline(ctx, x1, y, x2, color, lw) {
   ctx.save();
   ctx.strokeStyle = color;
@@ -387,7 +400,6 @@ function _hline(ctx, x1, y, x2, color, lw) {
   ctx.restore();
 }
 
-// Текст с выравниванием по правому краю
 function _rtxt(ctx, text, x, y, font, color) {
   ctx.save();
   ctx.font      = font;
@@ -397,7 +409,6 @@ function _rtxt(ctx, text, x, y, font, color) {
   ctx.restore();
 }
 
-// Перенос текста по ширине
 function _wrapText(ctx, text, font, maxW) {
   ctx.font = font;
   const words = String(text).split(" ");
@@ -416,61 +427,107 @@ function _wrapText(ctx, text, font, maxW) {
   return lines.length ? lines : [String(text)];
 }
 
-// Строка инфо-блока: лейбл + значение (однострочные)
-function _infoRow(ctx, ML, y, CW, LROW_H, VROW_H, label, value) {
-  ctx.fillStyle = RC.labelBg;
-  ctx.fillRect(ML, y, CW, LROW_H);
-  ctx.fillStyle = RC.dark;
-  ctx.font = "bold 9px sans-serif";
-  ctx.fillText(label, ML + 8, y + LROW_H * 0.7);
-  y += LROW_H;
+// Рендеринг строки клиента (Строго 2 колонки)
+function _clientRow(ctx, labelL, valL, labelR, valR, y) {
+  const lRowH = 5 * PT_MM;
+  const vRowH = 6.5 * PT_MM;
+  const ipad  = 2.5 * PT_MM;
+  const colR  = ML + CW / 2;
 
+  // Лейблы
+  ctx.fillStyle = RC.labelBg;
+  ctx.fillRect(ML, y, CW, lRowH);
+  ctx.fillStyle = RC.dark;
+  ctx.font = "bold 6.5pt sans-serif";
+  ctx.fillText(labelL.toUpperCase(), ML + ipad, y + lRowH * 0.65);
+  if (labelR) {
+    ctx.fillText(labelR.toUpperCase(), colR + ipad, y + lRowH * 0.65);
+  }
+  y += lRowH;
+
+  // Значения
   ctx.fillStyle = RC.white;
-  ctx.fillRect(ML, y, CW, VROW_H);
+  ctx.fillRect(ML, y, CW, vRowH);
   ctx.fillStyle = RC.ink;
-  ctx.font = "13px sans-serif";
-  ctx.fillText(String(value || "—"), ML + 8, y + VROW_H * 0.62);
-  y += VROW_H;
+  ctx.font = "9.5pt sans-serif";
+  ctx.fillText(String(valL || ""), ML + ipad, y + vRowH * 0.65);
+  if (labelR) {
+    ctx.fillText(String(valR || ""), colR + ipad, y + vRowH * 0.65);
+  }
+  y += vRowH;
+
   return y;
 }
 
-// Строка инфо-блока: лейбл + многострочное значение
-function _infoRowMultiline(ctx, ML, y, CW, LROW_H, label, value) {
-  ctx.fillStyle = RC.labelBg;
-  ctx.fillRect(ML, y, CW, LROW_H);
-  ctx.fillStyle = RC.dark;
-  ctx.font = "bold 9px sans-serif";
-  ctx.fillText(label, ML + 8, y + LROW_H * 0.7);
-  y += LROW_H;
+// Многострочный блок информации (Адрес, Примечание)
+function _clientRowMultiline(ctx, label, value, y, fontSizeVal) {
+  const lRowH = 5 * PT_MM;
+  const vRowH = 6.5 * PT_MM;
+  const ipad  = 2.5 * PT_MM;
+  const lineH = 5 * PT_MM;
 
-  const lines = _wrapText(ctx, value, "13px sans-serif", CW - 16);
-  const LINE_H = 18;
-  const rowH   = Math.max(34, lines.length * LINE_H + 10);
+  // Лейбл
+  ctx.fillStyle = RC.labelBg;
+  ctx.fillRect(ML, y, CW, lRowH);
+  ctx.fillStyle = RC.dark;
+  ctx.font = "bold 6.5pt sans-serif";
+  ctx.fillText(label.toUpperCase(), ML + ipad, y + lRowH * 0.65);
+  y += lRowH;
+
+  // Вычисление высоты блока и перенос текста
+  const lines = _wrapText(ctx, value || "—", `${fontSizeVal}pt sans-serif`, CW - ipad * 2);
+  const nLines = lines.length;
+  const addrH  = Math.max(vRowH, nLines * lineH + 3 * PT_MM);
+
   ctx.fillStyle = RC.white;
-  ctx.fillRect(ML, y, CW, rowH);
+  ctx.fillRect(ML, y, CW, addrH);
   ctx.fillStyle = RC.ink;
-  ctx.font = "13px sans-serif";
-  const textTop = y + (rowH - lines.length * LINE_H) / 2 + LINE_H * 0.75;
-  lines.forEach((ln, i) => ctx.fillText(ln, ML + 8, textTop + i * LINE_H));
-  y += rowH;
-  return y;
+  ctx.font = `${fontSizeVal}pt sans-serif`;
+
+  const textBlockH = nLines * lineH;
+  const textTop = y + (addrH - textBlockH) / 2 + lineH * 0.72;
+
+  lines.forEach((ln, li) => {
+    ctx.fillText(ln, ML + ipad, textTop + li * lineH);
+  });
+
+  return y + addrH;
 }
 
-// Строка итогов
-function _sumRow(ctx, ML, CW, y, label, value, bold = false, valueColor = null) {
-  const H = 28;
-  ctx.fillStyle = bold ? RC.dark : RC.hint;
-  ctx.font = "12px sans-serif";
+// Отрисовка строки промежуточных итогов
+function _sumRow(ctx, label, value, cPriceR, cSumR, y, bold = false, valueColor = null) {
+  const h = 7 * PT_MM;
+  ctx.fillStyle = RC.dark;
+  ctx.font = "8.5pt sans-serif";
   ctx.textAlign = "right";
-  ctx.fillText(label, ML + CW - 80, y + H * 0.62);
+  ctx.fillText(label, cPriceR, y + h * 0.62);
+
   ctx.fillStyle = valueColor || RC.ink;
-  ctx.font = bold ? "bold 13px sans-serif" : "13px sans-serif";
-  ctx.fillText(value, ML + CW, y + H * 0.62);
+  ctx.font = bold ? "bold 9.5pt sans-serif" : "9pt sans-serif";
+  ctx.fillText(value, cSumR, y + h * 0.62);
   ctx.textAlign = "left";
-  return y + H;
 }
 
-// Скруглённый прямоугольник (заливка)
+// Лейбл-пилюля для блоков оплаты
+function _drawPillLabel(ctx, x, y, text) {
+  const fontSize = 8.5;
+  const padH     = 3 * PT_MM;
+  
+  ctx.font = "bold 8.5pt sans-serif";
+  const tw = ctx.measureText(text).width;
+  const w  = tw + padH * 2;
+  const h  = fontSize * 1.6;
+
+  _roundRect(ctx, x, y, w, h, 1.2 * PT_MM, RC.labelBg);
+  
+  ctx.fillStyle = RC.dark;
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x + padH, y + h / 2);
+  ctx.textBaseline = "alphabetic";
+
+  return y + h;
+}
+
 function _roundRect(ctx, x, y, w, h, r, fill) {
   ctx.save();
   ctx.fillStyle = fill;
@@ -489,22 +546,11 @@ function _roundRect(ctx, x, y, w, h, r, fill) {
   ctx.restore();
 }
 
-// Пилюля-лейбл (серый фон, тёмный текст)
-function _pill(ctx, x, y, text) {
-  ctx.font = "bold 10px sans-serif";
-  const tw  = ctx.measureText(text).width;
-  const ph  = 18, pw = tw + 16, pr = 4;
-  _roundRect(ctx, x, y - 14, pw, ph, pr, RC.labelBg);
-  ctx.fillStyle = RC.dark;
-  ctx.fillText(text, x + 8, y - 14 + ph * 0.68);
-}
-
-// Загрузка изображения (Promise)
 function _loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload  = () => resolve(img);
-    img.onerror = () => reject(new Error("Не удалось загрузить: " + src));
+    img.onerror = () => reject(new Error("Не удалось загрузить логотип: " + src));
     img.src = src;
   });
 }
