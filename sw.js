@@ -5,7 +5,7 @@
 // GAS-запросы идут network-first с fallback на cache.
 // ══════════════════════════════════════════════════════════
 
-const CACHE_VERSION = '1.0.7'; // Обновлено для принудительного сброса кэша клиентов
+const CACHE_VERSION = '1.0.8'; // Обновлено для принудительного сброса кэша клиентов
 const CACHE_NAME    = 'slaunaya-shell-' + CACHE_VERSION;
 const GAS_CACHE     = 'slaunaya-gas-'   + CACHE_VERSION;
 
