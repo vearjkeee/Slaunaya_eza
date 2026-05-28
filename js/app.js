@@ -771,19 +771,39 @@ function filterMenu() {
 function addToCart(id) {
   const d = MENU.find(m => String(m.id) === id);
   if (!d) return;
+  
   if (!cart[id]) {
-    cart[id] = { d:{id, name:d.name, cat:d.cat||''}, q:0, p:+d.price||0, unit:d.unit||'порц.' };
+    cart[id] = {
+      d: { id, name: d.name, cat: d.cat || '' },
+      q: 0,
+      p: +d.price || 0,
+      unit: d.unit || 'порц.',
+    };
     cartOrder.push(id);
   }
-  cart[id].q++;
-  saveDraft(); updCart(); filterMenu();
+  
+  const { step } = getUnitStepAndMin(cart[id].unit);
+  cart[id].q = Math.round((cart[id].q + step) * 100) / 100;
+  
+  saveDraft();
+  updCart();
+  filterMenu();
 }
 
 function chQ(id, delta) {
   if (!cart[id]) return;
-  cart[id].q += delta;
-  if (cart[id].q <= 0) { delete cart[id]; cartOrder = cartOrder.filter(k => k !== id); }
-  saveDraft(); updCart(); filterMenu();
+  const { step } = getUnitStepAndMin(cart[id].unit);
+  let newQ = Math.round((cart[id].q + delta * step) * 100) / 100;
+  
+  if (newQ <= 0) {
+    delete cart[id];
+    cartOrder = cartOrder.filter(k => k !== id);
+  } else {
+    cart[id].q = newQ;
+  }
+  saveDraft();
+  updCart();
+  filterMenu();
 }
 
 // ── Ручное добавление ────────────────────────────────────
@@ -812,15 +832,14 @@ function goToCart() {
 }
 
 function renderCartFull() {
-  const keys  = cartOrder.length ? cartOrder.filter(k => cart[k]) : Object.keys(cart);
+  const keys = cartOrder.length ? cartOrder.filter(k => cart[k]) : Object.keys(cart);
   const empty = document.getElementById('cart-empty');
   const items = document.getElementById('cart-items');
   const noteW = document.getElementById('cart-note-wrap');
   const sv    = document.getElementById('sv-btn');
 
   if (!keys.length) {
-    empty.style.display = 'none'; // Изменено с flex для исключения артефактов при пустом рендере
-    empty.setAttribute("style", "display: flex;");
+    empty.style.display = 'flex';
     items.innerHTML     = '';
     if (noteW) noteW.style.display = 'none';
     sv.disabled = true;
@@ -842,19 +861,19 @@ function renderCartFull() {
   </div>` +
   keys.map(k => {
     const it = cart[k];
-    const unitLower = (it.unit || '').toLowerCase().trim();
-    const step = ['кг','л','кг.','л.','kg','l'].includes(unitLower) ? 0.1 : 1;
+    const { step } = getUnitStepAndMin(it.unit);
+
     return `<div class="ci" id="ci-${k}" draggable="false" data-key="${k}">
       <div class="ci-top">
         <div class="ci-drag" title="Перетащить">⠿</div>
         <div class="ci-name">${esc(it.d.name)}${it.manual?'<br><span style="font-size:11px;color:var(--hint)">вручную</span>':''}</div>
-        <button class="ci-del" onclick="removeFromCart('${k}')">✕</button>
+        <button class="ci-del" onclick="confirmRemoveFromCart('${k}')">🗑</button>
       </div>
       <div class="ci-bot">
         <div class="ci-pe">
           <div class="qc">
             <button class="qb" onclick="chCartQ('${k}',-${step})">−</button>
-            <input class="qv" type="number" value="${it.q}" step="${step}" min="0"
+            <input class="qv" type="number" value="${it.q}" step="${step}" min="${step}"
               oninput="chCartQInput('${k}', this.value)"/>
             <button class="qb" onclick="chCartQ('${k}',${step})">+</button>
           </div>
@@ -870,6 +889,21 @@ function renderCartFull() {
 
   updCart();
   _attachCartDrag();
+}
+
+function confirmRemoveFromCart(id) {
+  if (!cart[id]) return;
+  showConfirm(
+    "Удалить блюдо?",
+    `Хотите удалить блюдо «${cart[id].d.name}» из корзины?`,
+    "Удалить",
+    () => {
+      removeFromCart(id);
+      showToast("✓ Блюдо удалено");
+    },
+    null,
+    true // Красная кнопка подтверждения (danger)
+  );
 }
 
 function _attachCartDrag() {
@@ -933,38 +967,66 @@ function _syncCartOrderFromDOM(container) {
 function removeFromCart(id) {
   delete cart[id];
   cartOrder = cartOrder.filter(k => k !== id);
-  saveDraft(); renderCartFull();
+  saveDraft();
+  renderCartFull();
+  // Моментально перерисовываем каталог, убирая счетчики
+  if (typeof filterMenu === 'function') filterMenu();
+}
+
+function getUnitStepAndMin(unit) {
+  const u = (unit || '').toLowerCase().trim();
+  const isWeight = ['кг','л','г','мл','кг.','л.','kg','l','g','ml'].includes(u);
+  return {
+    step: isWeight ? 0.1 : 1,
+    min: isWeight ? 0.1 : 1,
+    isWeight: isWeight
+  };
 }
 
 function chCartQ(id, d) {
   if (!cart[id]) return;
-  cart[id].q = Math.round((cart[id].q + d) * 100) / 100;
-  if (cart[id].q <= 0) { delete cart[id]; cartOrder = cartOrder.filter(k => k !== id); saveDraft(); renderCartFull(); return; }
+  const { min } = getUnitStepAndMin(cart[id].unit);
+  
+  let newQ = Math.round((cart[id].q + d) * 100) / 100;
+  if (newQ < min) {
+    newQ = min; // Останавливаемся на минимальном шаге
+  }
+  
+  cart[id].q = newQ;
+  
   const qv = document.querySelector(`#ci-${CSS.escape(id)} .qv`);
-  if (qv) { if (qv.tagName === 'INPUT') qv.value = cart[id].q; else qv.textContent = cart[id].q; }
+  if (qv) {
+    if (qv.tagName === 'INPUT') qv.value = cart[id].q;
+    else qv.textContent = cart[id].q;
+  }
+  
   const t = document.getElementById('cit-' + id);
   if (t) t.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
-  saveDraft(); updCart();
+  
+  saveDraft();
+  updCart();
+  
+  // Синхронизируем отображение в каталоге меню
+  if (typeof filterMenu === 'function') filterMenu();
 }
 
 // Корректное удаление товара из корзины при вводе 0 вручную
 function chCartQInput(id, val) {
   if (!cart[id]) return;
+  const { min } = getUnitStepAndMin(cart[id].unit);
   let q = parseFloat(val);
-  if (isNaN(q) || q < 0) q = 0;
+  if (isNaN(q)) return; // Даем пользователю стереть для ввода новой цифры
+  if (q < min) q = min;
+  
   cart[id].q = Math.round(q * 100) / 100;
-
-  if (cart[id].q <= 0) {
-    delete cart[id];
-    cartOrder = cartOrder.filter(k => k !== id);
-    saveDraft();
-    renderCartFull();
-    return;
-  }
-
+  
   const t = document.getElementById('cit-' + id);
   if (t) t.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
-  saveDraft(); updCart();
+  
+  saveDraft();
+  updCart();
+  
+  if (typeof filterMenu === 'function') filterMenu();
 }
 
 function chCartPrice(id, v) {
