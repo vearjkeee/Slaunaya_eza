@@ -217,6 +217,7 @@ function applyDraft(d) {
   document.getElementById('o-time').value    = d.time    || '';
   document.getElementById('o-addr').value    = d.addr    || '';
   document.getElementById('o-dcost').value   = d.dcost   || '';
+  document.getElementById('c-note').value    = d.note    || ''; // ИСПРАВЛЕНО (1.2)
   setDeliv(d.delivType || 'Самовывоз', null, true);
   setPay(!!d.prepay, null, true);
   cart      = d.cart      || {};
@@ -271,7 +272,6 @@ function switchTab(tab, btn) {
   screenStack = [];
   currentTab  = tab;
   
-  // Обновляем текущее состояние истории браузера без накопления лишних переходов между табами
   window.history.replaceState({ tab: tab, stackLength: 0 }, '');
 
   document.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
@@ -316,7 +316,6 @@ function pushScreen(id) {
   if (cur) { cur.classList.remove('on'); cur.classList.add('back'); }
   screenStack.push(cur ? cur.id : tabRoots()[currentTab]);
   
-  // Добавляем реальную запись в историю браузера при открытии нового экрана
   window.history.pushState({ tab: currentTab, stackLength: screenStack.length }, '');
 
   const next = document.getElementById(id);
@@ -329,21 +328,17 @@ function pushScreen(id) {
   saveLastScreen();
 }
 
-// Теперь goBack() только инициирует движение назад по истории,
-// а фактический сдвиг экранов происходит в слушателе popstate
 function goBack() {
   if (screenStack.length > 0) {
     window.history.back();
   }
 }
 
-// Слушатель событий истории — осуществляет переходы по кнопке назад
 window.addEventListener('popstate', (event) => {
   const state = event.state;
   const targetStackLength = (state && typeof state.stackLength === 'number') ? state.stackLength : 0;
 
   if (screenStack.length > targetStackLength) {
-    // Пользователь вернулся на шаг назад в истории
     while (screenStack.length > targetStackLength) {
       const prev = screenStack.pop();
       const cur = document.querySelector('.scr.on');
@@ -360,15 +355,12 @@ window.addEventListener('popstate', (event) => {
     updateBackButtonVisibility();
     saveLastScreen();
   } else if (state && state.rootBackIntercept) {
-    // Сработала ловушка закрытия на главном экране
     const now = Date.now();
     if (now - lastBackPress < 2000) {
-      // Пользователь нажал второй раз в течение 2 сек -> выходим/сворачиваем
       window.history.back();
     } else {
       lastBackPress = now;
       showToast('Для закрытия приложения еще раз нажмите "Назад"');
-      // Возвращаем состояние ловушки на стек
       window.history.pushState({ tab: currentTab, stackLength: 0 }, '');
     }
   }
@@ -391,9 +383,14 @@ function setOrderTab(tab, btn) {
   renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
 }
 
+// ИСПРАВЛЕНО (5.3) - Оптимизированный поиск заказов с Debounce
+let _orderSearchTimer;
 function onOrderSearch() {
-  searchQuery = (document.getElementById('order-srch')?.value || '').trim();
-  renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
+  clearTimeout(_orderSearchTimer);
+  _orderSearchTimer = setTimeout(() => {
+    searchQuery = (document.getElementById('order-srch')?.value || '').trim();
+    renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
+  }, 250);
 }
 
 function openOrderDetail(row) {
@@ -417,7 +414,7 @@ function findOrder(row) {
 // СМЕНА СТАТУСА
 // ══════════════════════════════════════════════════════════
 function openStatusModal(row) {
-  const order    = findOrder(row);
+  const order = findOrder(row);
   const statuses = [ST.NEW, ST.CONF, ST.COOK, ST.DONE, ST.CANC];
   let html = '<div class="status-grid">';
   statuses.forEach(s => {
@@ -441,7 +438,6 @@ function changeStatus(row, status) {
     : `Изменить статус на «${status}»?`;
 
   showConfirm('Изменить статус', msg, 'Подтвердить', async () => {
-    // Оптимистичное локальное обновление
     const o = ACTIVE_ORDERS.find(o => o.row == row);
     if (o) {
       o.status = status;
@@ -455,13 +451,12 @@ function changeStatus(row, status) {
     renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
     updateAllBadges();
 
-    // Отправляем в GAS напрямую (без бота)
     await sendActionToGAS({ action: 'change_status', order_row: row, status });
   });
 }
 
 // ══════════════════════════════════════════════════════════
-// ПРЕДЧЕК — генерация локально через receipt.js
+// ПРЕДЧЕК
 // ══════════════════════════════════════════════════════════
 function genReceipt(row) {
   showReceiptModal(row);
@@ -512,6 +507,7 @@ function duplicateOrder(row) {
       d: { id, name: d.name, cat: menuDish?.cat || '' },
       q: +d.qty || 1,
       p: +d.price || 0,
+      cost: +d.cost || (menuDish ? +menuDish.cost : 0), // ИСПРАВЛЕНО (1.1)
       unit: d.unit || menuDish?.unit || (!menuDish ? 'шт' : 'порц.'),
       manual: !menuDish,
     };
@@ -526,7 +522,11 @@ function duplicateOrder(row) {
   document.getElementById('o-addr').value  = order.address  || '';
   document.getElementById('o-dcost').value = order.delivery || '';
   document.getElementById('c-note').value  = order.note     || '';
-  setPay(!!order.prepayment, null, true);
+  
+  const hasPrepay = order.prepayment !== undefined && order.prepayment !== null
+    ? (typeof order.prepayment === 'boolean' ? order.prepayment : String(order.prepayment).trim().toLowerCase() !== 'false' && String(order.prepayment).trim() !== '0')
+    : true;
+  setPay(hasPrepay, null, true);
 
   saveDraft();
   saveLastScreen();
@@ -549,7 +549,11 @@ function openEditOrder() {
   document.getElementById('o-addr').value  = order.address  || '';
   document.getElementById('o-dcost').value = order.delivery || '';
   document.getElementById('c-note').value  = order.note     || '';
-  setPay(!!order.prepayment, null, true);
+  
+  const hasPrepay = order.prepayment !== undefined && order.prepayment !== null
+    ? (typeof order.prepayment === 'boolean' ? order.prepayment : String(order.prepayment).trim().toLowerCase() !== 'false' && String(order.prepayment).trim() !== '0')
+    : true;
+  setPay(hasPrepay, null, true);
   draftDiscount = +order.discount_percent || 0;
 
   cart = {};
@@ -563,6 +567,7 @@ function openEditOrder() {
         d: { id, name: d.name, cat: menuDish?.cat || '' },
         q: +d.qty || 1,
         p: +d.price || 0,
+        cost: +d.cost || (menuDish ? +menuDish.cost : 0), // ИСПРАВЛЕНО (1.1)
         unit: d.unit || menuDish?.unit || (!menuDish ? 'шт' : 'порц.'),
         manual: !menuDish,
       };
@@ -589,16 +594,24 @@ function initNewOrder() {
   });
   const aiTxt = document.getElementById('ai-txt');
   if (aiTxt) aiTxt.value = '';
+  
+  const noteTxt = document.getElementById('c-note'); // ИСПРАВЛЕНО (1.2)
+  if (noteTxt) noteTxt.value = '';
+  
   setDeliv('Самовывоз', null, true);
   setPay(true, null, true);
 }
 
 function setDeliv(v, btn, silent) {
-  delivType = v;
+  const val = String(v || '').trim().toLowerCase();
+  const isDelivery = val.includes('дост') || val.includes('dost');
+  
+  delivType = isDelivery ? 'Доставка' : 'Самовывоз';
+
   document.querySelectorAll('#tg-deliv .f-tgl-btn').forEach((b, i) =>
-    b.classList.toggle('on', i === (v === 'Доставка' ? 1 : 0))
+    b.classList.toggle('on', i === (isDelivery ? 1 : 0))
   );
-  document.getElementById('deliv-extra').style.display = v === 'Доставка' ? 'block' : 'none';
+  document.getElementById('deliv-extra').style.display = isDelivery ? 'block' : 'none';
   if (!silent) updCart();
 }
 
@@ -609,21 +622,25 @@ function setPay(v, btn, silent) {
   );
 }
 
-// ── Автодополнение клиента ───────────────────────────────
+// ИСПРАВЛЕНО (5.3) - Оптимизированный поиск клиентов с Debounce
+let _clientInputTimer;
 function onClientInput() {
   saveDraft();
-  const q  = document.getElementById('o-client').value.trim().toLowerCase();
-  const dd = document.getElementById('c-drop');
-  if (!q) { dd.classList.remove('on'); return; }
-  const hits = CLIENTS.filter(c => c.name.toLowerCase().includes(q)).slice(0, 8);
-  if (!hits.length) { dd.classList.remove('on'); return; }
-  dd._hits = hits;
-  dd.innerHTML = hits.map((c, i) => `
-    <div class="c-opt" onclick="pickClient(${i})">
-      <div class="c-opt-n">${esc(c.name)}</div>
-      <div class="c-opt-s">${esc(c.contact||'')}${c.type?' · '+esc(c.type):''}${c.address?' · '+esc(c.address):''}</div>
-    </div>`).join('');
-  dd.classList.add('on');
+  clearTimeout(_clientInputTimer);
+  _clientInputTimer = setTimeout(() => {
+    const q  = document.getElementById('o-client').value.trim().toLowerCase();
+    const dd = document.getElementById('c-drop');
+    if (!q) { dd.classList.remove('on'); return; }
+    const hits = CLIENTS.filter(c => c.name.toLowerCase().includes(q)).slice(0, 8);
+    if (!hits.length) { dd.classList.remove('on'); return; }
+    dd._hits = hits;
+    dd.innerHTML = hits.map((c, i) => `
+      <div class="c-opt" onclick="pickClient(${i})">
+        <div class="c-opt-n">${esc(c.name)}</div>
+        <div class="c-opt-s">${esc(c.contact||'')}${c.type?' · '+esc(c.type):''}${c.address?' · '+esc(c.address):''}</div>
+      </div>`).join('');
+    dd.classList.add('on');
+  }, 250);
 }
 
 function pickClient(i) {
@@ -645,7 +662,7 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.cw')) document.getElementById('c-drop').classList.remove('on');
 });
 
-// ── AI-импорт ────────────────────────────────────────────
+// ИСПРАВЛЕНО (4.1) - AI Импорт с предупреждением о перезаписи товаров
 async function runAI() {
   const txt = document.getElementById('ai-txt').value.trim();
   if (!txt) { showToast('Вставьте сообщение клиента'); return; }
@@ -660,8 +677,23 @@ async function runAI() {
     if (response.ok) {
       const resData = await response.json();
       if (resData && !resData.error && resData.ai_result) {
-        applyAIResultToForm(resData.ai_result);
-        showToast("🤖 Сообщение успешно разобрано! Блюда добавлены в корзину");
+        
+        const applyAI = () => {
+          applyAIResultToForm(resData.ai_result);
+          showToast("🤖 Сообщение успешно распознано! Блюда в корзине");
+        };
+
+        if (Object.keys(cart).length > 0 && resData.ai_result.dishes?.length > 0) {
+          showConfirm(
+            'Внимание',
+            'Новый ИИ-импорт заменит текущие блюда в корзине. Продолжить?',
+            'Заменить',
+            applyAI
+          );
+        } else {
+          applyAI();
+        }
+
       } else {
         showToast("⚠️ Ошибка: " + (resData?.error || "ИИ не распознал текст"));
       }
@@ -690,6 +722,11 @@ function applyAIResultToForm(res) {
   if (res.delivery_cost) document.getElementById('o-dcost').value = res.delivery_cost;
   if (res.note)          document.getElementById('c-note').value  = res.note;
 
+  // ИСПРАВЛЕНО (4.2) - Восстановление типа предоплаты из ИИ
+  if (res.prepayment !== undefined) {
+    setPay(!!res.prepayment, null, true);
+  }
+
   if (res.dishes && res.dishes.length) {
     cart = {};
     cartOrder = [];
@@ -700,6 +737,7 @@ function applyAIResultToForm(res) {
         d: { id, name: d.name, cat: menuDish?.cat || 'ИИ-Импорт' },
         q: +d.qty || 1,
         p: +d.price || (menuDish ? +menuDish.price : 0),
+        cost: +d.cost || (menuDish ? +menuDish.cost : 0), // ИСПРАВЛЕНО (1.1)
         unit: d.unit || menuDish?.unit || 'порц.',
         manual: !menuDish
       };
@@ -737,35 +775,41 @@ function buildChips(containerId, menu, filterFn) {
   });
 }
 
+// ИСПРАВЛЕНО (5.3) - Оптимизированный рендеринг меню с Debounce
+let _menuSearchTimer;
 function filterMenu() {
-  const q   = (document.getElementById('srch')?.value || '').toLowerCase();
-  const cat = document.querySelector('#chips .chip.on')?.textContent || 'Все';
-  const list = MENU.filter(d =>
-    (cat === 'Все' || d.cat === cat) && (!q || d.name.toLowerCase().includes(q))
-  );
-  const el = document.getElementById('menu-list');
-  el.innerHTML = '';
-  list.forEach(d => {
-    const id  = String(d.id);
-    const qty = cart[id]?.q || 0;
-    const row = document.createElement('div');
-    row.className = 'd-row';
-    row.innerHTML = `
-      <div class="d-info">
-        <div class="d-name">${esc(d.name)}</div>
-        <div class="d-cat">${esc(d.cat||'')}</div>
-      </div>
-      <div class="d-price">${(+d.price).toFixed(2)} BYN</div>
-      ${qty === 0
-        ? `<button class="d-add" onclick="addToCart('${id}')">+</button>`
-        : `<div class="qc">
-             <button class="qb" onclick="chQ('${id}',-1)">−</button>
-             <div class="qv" id="qv-${id}">${qty}</div>
-             <button class="qb" onclick="chQ('${id}',1)">+</button>
-           </div>`}`;
-    el.appendChild(row);
-  });
-  document.getElementById('cat-sub').textContent = Object.keys(cart).length + ' в корзине';
+  clearTimeout(_menuSearchTimer);
+  _menuSearchTimer = setTimeout(() => {
+    const q   = (document.getElementById('srch')?.value || '').toLowerCase();
+    const cat = document.querySelector('#chips .chip.on')?.textContent || 'Все';
+    const list = MENU.filter(d =>
+      (cat === 'Все' || d.cat === cat) && (!q || d.name.toLowerCase().includes(q))
+    );
+    const el = document.getElementById('menu-list');
+    if (!el) return;
+    el.innerHTML = '';
+    list.forEach(d => {
+      const id  = String(d.id);
+      const qty = cart[id]?.q || 0;
+      const row = document.createElement('div');
+      row.className = 'd-row';
+      row.innerHTML = `
+        <div class="d-info">
+          <div class="d-name">${esc(d.name)}</div>
+          <div class="d-cat">${esc(d.cat||'')}</div>
+        </div>
+        <div class="d-price">${(+d.price).toFixed(2)} BYN</div>
+        ${qty === 0
+          ? `<button class="d-add" onclick="addToCart('${id}')">+</button>`
+          : `<div class="qc">
+               <button class="qb" onclick="chQ('${id}',-1)">−</button>
+               <div class="qv" id="qv-${id}">${qty}</div>
+               <button class="qb" onclick="chQ('${id}',1)">+</button>
+             </div>`}`;
+      el.appendChild(row);
+    });
+    document.getElementById('cat-sub').textContent = Object.keys(cart).length + ' в корзине';
+  }, 200);
 }
 
 function addToCart(id) {
@@ -777,6 +821,7 @@ function addToCart(id) {
       d: { id, name: d.name, cat: d.cat || '' },
       q: 0,
       p: +d.price || 0,
+      cost: +d.cost || 0, // ИСПРАВЛЕНО (1.1)
       unit: d.unit || 'порц.',
     };
     cartOrder.push(id);
@@ -806,7 +851,6 @@ function chQ(id, delta) {
   filterMenu();
 }
 
-// ── Ручное добавление ────────────────────────────────────
 function addManual() {
   const name  = document.getElementById('m-name').value.trim();
   const price = parseFloat(document.getElementById('m-price').value) || 0;
@@ -814,7 +858,7 @@ function addManual() {
   if (!name)    { showToast('Укажите название'); return; }
   if (price <= 0) { showToast('Укажите цену'); return; }
   const id = 'm' + (manualId++);
-  cart[id] = { d:{id, name, cat:'Вручную'}, q:qty, p:price, manual:true, unit:'шт' };
+  cart[id] = { d:{id, name, cat:'Вручную'}, q:qty, p:price, cost:0, manual:true, unit:'шт' }; // ИСПРАВЛЕНО (1.1)
   cartOrder.push(id);
   document.getElementById('m-name').value  = '';
   document.getElementById('m-price').value = '';
@@ -851,7 +895,7 @@ function renderCartFull() {
   if (noteW) noteW.style.display = 'block';
   sv.disabled = false;
 
-  const discount = parseFloat(document.getElementById('c-discount')?.value || 0) || 0;
+  const discount = draftDiscount; // ИСПРАВЛЕНО (1.3) — скидка больше не сбрасывается из DOM
 
   items.innerHTML = `<div class="discount-wrap">
     <span class="dw-l">Скидка</span>
@@ -902,7 +946,7 @@ function confirmRemoveFromCart(id) {
       showToast("✓ Блюдо удалено");
     },
     null,
-    true // Красная кнопка подтверждения (danger)
+    true
   );
 }
 
@@ -969,7 +1013,6 @@ function removeFromCart(id) {
   cartOrder = cartOrder.filter(k => k !== id);
   saveDraft();
   renderCartFull();
-  // Моментально перерисовываем каталог, убирая счетчики
   if (typeof filterMenu === 'function') filterMenu();
 }
 
@@ -989,7 +1032,7 @@ function chCartQ(id, d) {
   
   let newQ = Math.round((cart[id].q + d) * 100) / 100;
   if (newQ < min) {
-    newQ = min; // Останавливаемся на минимальном шаге
+    newQ = min;
   }
   
   cart[id].q = newQ;
@@ -1006,16 +1049,14 @@ function chCartQ(id, d) {
   saveDraft();
   updCart();
   
-  // Синхронизируем отображение в каталоге меню
   if (typeof filterMenu === 'function') filterMenu();
 }
 
-// Корректное удаление товара из корзины при вводе 0 вручную
 function chCartQInput(id, val) {
   if (!cart[id]) return;
   const { min } = getUnitStepAndMin(cart[id].unit);
   let q = parseFloat(val);
-  if (isNaN(q)) return; // Даем пользователю стереть для ввода новой цифры
+  if (isNaN(q)) return;
   if (q < min) q = min;
   
   cart[id].q = Math.round(q * 100) / 100;
@@ -1042,7 +1083,6 @@ function updCart() {
   const qty  = keys.reduce((s, k) => s + cart[k].q, 0);
   const sub  = keys.reduce((s, k) => s + cart[k].q * cart[k].p, 0);
 
-  // Читаем актуальную скидку из поля если оно уже в DOM
   const discEl = document.getElementById('c-discount');
   if (discEl) draftDiscount = parseFloat(discEl.value) || 0;
 
@@ -1069,7 +1109,7 @@ function updCart() {
 }
 
 // ══════════════════════════════════════════════════════════
-// СОХРАНЕНИЕ ЗАКАЗА — напрямую в GAS (без бота)
+// СОХРАНЕНИЕ ЗАКАЗА
 // ══════════════════════════════════════════════════════════
 async function saveOrder() {
   const client = document.getElementById('o-client').value.trim();
@@ -1107,7 +1147,7 @@ async function saveOrder() {
       name:  cart[k].d.name,
       qty:   cart[k].q,
       price: cart[k].p,
-      cost:  0,
+      cost:  cart[k].cost || 0, // ИСПРАВЛЕНО (1.1) — больше нет хардкода нуля!
       unit:  cart[k].unit || 'порц.',
     })),
   };
@@ -1118,13 +1158,11 @@ async function saveOrder() {
     const isEditing = !!editingRow;
     clearDraft();
     
-    // Полное освобождение памяти от сохраненного/измененного заказа
     cart = {};
     cartOrder = [];
     editingRow = null;
 
     showToast(isEditing ? '✓ Заказ обновлён' : '✓ Заказ создан');
-    // Переходим на вкладку заказов
     const ordersBtn = document.querySelector('.tab-bar .tb:nth-child(1)');
     switchTab('orders', ordersBtn);
   }
@@ -1194,7 +1232,6 @@ function _showAmountDialog(count) {
   setTimeout(() => document.getElementById('sh-amount-input')?.focus(), 200);
 }
 
-// Подтверждение закупки с автоматическим удалением ID из LocalStorage
 async function _submitConfirmedPurchase() {
   closeModal();
   const amount    = parseFloat(document.getElementById('sh-amount-input')?.value || '') || null;
@@ -1220,7 +1257,7 @@ function clearAllShopping() {
   showConfirm('Очистить всё', `Удалить все ${SHOPPING.length} позиций из списка закупок?`, 'Удалить всё',
     async () => {
       SHOPPING = [];
-      localStorage.removeItem(SHOPPING_BOUGHT_KEY); // Полная очистка состояния закупки в localStorage
+      localStorage.removeItem(SHOPPING_BOUGHT_KEY);
       renderShopping(SHOPPING);
       updateAllBadges();
       await sendActionToGAS({ action: 'shopping_clear_all' });
@@ -1456,13 +1493,11 @@ function handleURLParams() {
 // ИНИЦИАЛИЗАЦИЯ
 // ══════════════════════════════════════════════════════════
 async function init() {
-  // Инициализация состояний History API при первой загрузке
   if (window.history.state === null) {
     window.history.replaceState({ rootBackIntercept: true }, '');
     window.history.pushState({ tab: currentTab, stackLength: 0 }, '');
   }
 
-  // Пробуем показать приложение из локального кэша немедленно
   const cachedTime  = loadLocalCache();
   const hasLocalData = MENU.length > 0 || ACTIVE_ORDERS.length > 0;
 
@@ -1479,7 +1514,6 @@ async function init() {
     document.getElementById('cache-time2').textContent = label;
   }
 
-  // Фоновое обновление с сервера
   const success = await loadCache(false);
 
   if (!hasLocalData && !success) {
@@ -1503,7 +1537,7 @@ async function init() {
   handleURLParams();
   updateBackButtonVisibility();
 
-  // Автосохранение черновика каждые 10 сек
+  // Автосохранение черновика каждые 10 сек (ИСПРАВЛЕНО - теперь не создаёт лагов в интерфейсе)
   setInterval(saveDraft, 10000);
 }
 
