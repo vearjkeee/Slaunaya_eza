@@ -344,7 +344,7 @@ function _drawReceipt(ctx, order, logo, canvasH) {
     y += 5.5 * PT_MM;
   });
 
-  const prefix = "4. Номер карты:  ";
+  const prefix = "4. Номер договора:  ";
   ctx.font = "9pt sans-serif";
   ctx.fillText(prefix, ML, y);
   const prefixW = ctx.measureText(prefix).width;
