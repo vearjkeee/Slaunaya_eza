@@ -42,6 +42,7 @@ const CACHE_KEY           = 'slaunaya_data_cache_v2';
 const STATE_KEY           = 'slaunaya_screen_state_v2';
 const DRAFT_KEY           = 'order_draft_v1';
 const SHOPPING_BOUGHT_KEY = 'shopping_bought_v1';
+const DASH_CACHE_KEY      = 'slaunaya_dash_v1';
 
 // Переменная времени для ловушки кнопки «Назад»
 let lastBackPress = 0;
@@ -1341,17 +1342,58 @@ const MONTH_NAMES = ["","Январь","Февраль","Март","Апрель
 
 async function loadDashboard() {
   const now = new Date();
-  const isCurrentOrFuture = (dashYear > now.getFullYear()) || (dashYear === now.getFullYear() && dashMonth >= now.getMonth() + 1);
+  const isCurrentOrFuture = (dashYear > now.getFullYear()) ||
+    (dashYear === now.getFullYear() && dashMonth >= now.getMonth() + 1);
+
   const nextBtn = document.getElementById('db-month-next');
   if (nextBtn) nextBtn.disabled = isCurrentOrFuture;
 
-  document.getElementById('dashboard-body').innerHTML = `<div class="empty-state"><div class="spin" style="width:28px;height:28px;border-width:2px"></div></div>`;
+  // Лейбл выставляем сразу — до любого запроса
+  const labelEl = document.getElementById('db-month-label');
+  if (labelEl) labelEl.textContent = MONTH_NAMES[dashMonth] + ' ' + dashYear;
 
+  // Пробуем показать кэш мгновенно
+  const cacheKey = DASH_CACHE_KEY + '_' + dashYear + '_' + dashMonth;
+  let hasCached = false;
+  try {
+    const raw = localStorage.getItem(cacheKey);
+    if (raw) {
+      const cached = JSON.parse(raw);
+      renderDashboard(cached);
+      hasCached = true;
+    }
+  } catch (e) {}
+
+  // Если кэша нет — показываем спиннер
+  if (!hasCached) {
+    document.getElementById('dashboard-body').innerHTML =
+      `<div class="empty-state">
+        <div class="spin" style="width:28px;height:28px;border-width:2px"></div>
+      </div>`;
+  }
+
+  // Запрашиваем свежие данные в фоне
   const data = await fetchDashboard(dashMonth, dashYear);
+
   if (!data) {
-    document.getElementById('dashboard-body').innerHTML = `<div class="empty-state"><div class="empty-ico">⚠️</div><div class="empty-title">Нет данных</div><div class="empty-sub">Проверьте подключение</div></div>`;
+    // Если совсем нет данных — показываем ошибку
+    if (!hasCached) {
+      document.getElementById('dashboard-body').innerHTML =
+        `<div class="empty-state">
+          <div class="empty-ico">⚠️</div>
+          <div class="empty-title">Нет данных</div>
+          <div class="empty-sub">Проверьте подключение</div>
+        </div>`;
+    }
     return;
   }
+
+  // Сохраняем в кэш
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(data));
+  } catch (e) {}
+
+  // Перерисовываем с актуальными данными
   renderDashboard(data);
 }
 
@@ -1515,6 +1557,8 @@ async function init() {
 
     const cachedTime  = loadLocalCache();
     const hasLocalData = MENU.length > 0 || ACTIVE_ORDERS.length > 0;
+    const _dbLbl = document.getElementById('db-month-label');
+    if (_dbLbl) _dbLbl.textContent = MONTH_NAMES[dashMonth] + ' ' + dashYear;
 
     if (hasLocalData) {
       document.getElementById('loader').style.display = 'none';
