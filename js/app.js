@@ -1336,6 +1336,11 @@ async function saveDishEdit() {
 // ══════════════════════════════════════════════════════════
 // ДАШБОРД (ФИНАНСЫ)
 // ══════════════════════════════════════════════════════════
+let dashMonth = new Date().getMonth() + 1;
+let dashYear  = new Date().getFullYear();
+const MONTH_NAMES = ["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+let _lastDashData = null;
+
 async function loadDashboard() {
   const now = new Date();
   const isCurrentOrFuture = (dashYear > now.getFullYear()) ||
