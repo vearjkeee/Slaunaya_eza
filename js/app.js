@@ -47,6 +47,9 @@ const DASH_CACHE_KEY      = 'slaunaya_dash_v1';
 // Переменная времени для ловушки кнопки «Назад»
 let lastBackPress = 0;
 
+// Счётчик запросов для предотвращения race conditions на дашборде
+let currentDashboardRequestId = 0;
+
 // ══════════════════════════════════════════════════════════
 // ЛОКАЛЬНЫЙ КЭШ
 // ══════════════════════════════════════════════════════════
@@ -218,7 +221,7 @@ function applyDraft(d) {
   document.getElementById('o-time').value    = d.time    || '';
   document.getElementById('o-addr').value    = d.addr    || '';
   document.getElementById('o-dcost').value   = d.dcost   || '';
-  document.getElementById('c-note').value    = d.note    || ''; // ИСПРАВЛЕНО (1.2)
+  document.getElementById('c-note').value    = d.note    || '';
   setDeliv(d.delivType || 'Самовывоз', null, true);
   setPay(!!d.prepay, null, true);
   cart      = d.cart      || {};
@@ -280,7 +283,6 @@ function switchTab(tab, btn) {
   if (btn) {
     btn.classList.add('on');
   } else {
-    // Резервный выбор кнопки навигации, если объект не передан напрямую
     const tabIndexMap = { orders:1, new:2, shopping:3, dashboard:4, menu:5 };
     const btnIdx = tabIndexMap[tab] || 1;
     const backupBtn = document.querySelectorAll('.tab-bar .tb')[btnIdx - 1];
@@ -399,7 +401,6 @@ function setOrderTab(tab, btn) {
   renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
 }
 
-// ИСПРАВЛЕНО (5.3) - Оптимизированный поиск заказов с Debounce
 let _orderSearchTimer;
 function onOrderSearch() {
   clearTimeout(_orderSearchTimer);
@@ -523,7 +524,7 @@ function duplicateOrder(row) {
       d: { id, name: d.name, cat: menuDish?.cat || '' },
       q: +d.qty || 1,
       p: +d.price || 0,
-      cost: +d.cost || (menuDish ? +menuDish.cost : 0), // ИСПРАВЛЕНО (1.1)
+      cost: +d.cost || (menuDish ? +menuDish.cost : 0),
       unit: d.unit || menuDish?.unit || (!menuDish ? 'шт' : 'порц.'),
       manual: !menuDish,
     };
@@ -583,7 +584,7 @@ function openEditOrder() {
         d: { id, name: d.name, cat: menuDish?.cat || '' },
         q: +d.qty || 1,
         p: +d.price || 0,
-        cost: +d.cost || (menuDish ? +menuDish.cost : 0), // ИСПРАВЛЕНО (1.1)
+        cost: +d.cost || (menuDish ? +menuDish.cost : 0),
         unit: d.unit || menuDish?.unit || (!menuDish ? 'шт' : 'порц.'),
         manual: !menuDish,
       };
@@ -611,7 +612,7 @@ function initNewOrder() {
   const aiTxt = document.getElementById('ai-txt');
   if (aiTxt) aiTxt.value = '';
   
-  const noteTxt = document.getElementById('c-note'); // ИСПРАВЛЕНО (1.2)
+  const noteTxt = document.getElementById('c-note');
   if (noteTxt) noteTxt.value = '';
   
   setDeliv('Самовывоз', null, true);
@@ -638,7 +639,6 @@ function setPay(v, btn, silent) {
   );
 }
 
-// ИСПРАВЛЕНО (5.3) - Оптимизированный поиск клиентов с Debounce
 let _clientInputTimer;
 function onClientInput() {
   saveDraft();
@@ -678,7 +678,6 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.cw')) document.getElementById('c-drop').classList.remove('on');
 });
 
-// ИСПРАВЛЕНО (4.1) - AI Импорт с предупреждением о перезаписи товаров
 async function runAI() {
   const txt = document.getElementById('ai-txt').value.trim();
   if (!txt) { showToast('Вставьте сообщение клиента'); return; }
@@ -752,7 +751,7 @@ function applyAIResultToForm(res) {
         d: { id, name: d.name, cat: menuDish?.cat || 'ИИ-Импорт' },
         q: +d.qty || 1,
         p: +d.price || (menuDish ? +menuDish.price : 0),
-        cost: +d.cost || (menuDish ? +menuDish.cost : 0), // ИСПРАВЛЕНО (1.1)
+        cost: +d.cost || (menuDish ? +menuDish.cost : 0),
         unit: d.unit || menuDish?.unit || 'порц.',
         manual: !menuDish
       };
@@ -790,7 +789,6 @@ function buildChips(containerId, menu, filterFn) {
   });
 }
 
-// ИСПРАВЛЕНО (5.3) - Оптимизированный рендеринг меню с Debounce
 let _menuSearchTimer;
 function filterMenu() {
   clearTimeout(_menuSearchTimer);
@@ -836,7 +834,7 @@ function addToCart(id) {
       d: { id, name: d.name, cat: d.cat || '' },
       q: 0,
       p: +d.price || 0,
-      cost: +d.cost || 0, // ИСПРАВЛЕНО (1.1)
+      cost: +d.cost || 0,
       unit: d.unit || 'порц.',
     };
     cartOrder.push(id);
@@ -873,7 +871,7 @@ function addManual() {
   if (!name)    { showToast('Укажите название'); return; }
   if (price <= 0) { showToast('Укажите цену'); return; }
   const id = 'm' + (manualId++);
-  cart[id] = { d:{id, name, cat:'Вручную'}, q:qty, p:price, cost:0, manual:true, unit:'шт' }; // ИСПРАВЛЕНО (1.1)
+  cart[id] = { d:{id, name, cat:'Вручную'}, q:qty, p:price, cost:0, manual:true, unit:'шт' };
   cartOrder.push(id);
   document.getElementById('m-name').value  = '';
   document.getElementById('m-price').value = '';
@@ -910,7 +908,7 @@ function renderCartFull() {
   if (noteW) noteW.style.display = 'block';
   sv.disabled = false;
 
-  const discount = draftDiscount; // ИСПРАВЛЕНО (1.3)
+  const discount = draftDiscount;
 
   items.innerHTML = `<div class="discount-wrap">
     <span class="dw-l">Скидка</span>
@@ -1162,7 +1160,7 @@ async function saveOrder() {
       name:  cart[k].d.name,
       qty:   cart[k].q,
       price: cart[k].p,
-      cost:  cart[k].cost || 0, // ИСПРАВЛЕНО (1.1)
+      cost:  cart[k].cost || 0,
       unit:  cart[k].unit || 'порц.',
     })),
   };
@@ -1333,7 +1331,7 @@ async function saveDishEdit() {
 }
 
 // ══════════════════════════════════════════════════════════
-// ДАШБОРД
+// ДАШБОРД (ФИНАНСЫ)
 // ══════════════════════════════════════════════════════════
 let dashMonth = new Date().getMonth() + 1;
 let dashYear  = new Date().getFullYear();
@@ -1352,6 +1350,8 @@ async function loadDashboard() {
   const labelEl = document.getElementById('db-month-label');
   if (labelEl) labelEl.textContent = MONTH_NAMES[dashMonth] + ' ' + dashYear;
 
+  const dbBody = document.getElementById('dashboard-body');
+
   // Пробуем показать кэш мгновенно
   const cacheKey = DASH_CACHE_KEY + '_' + dashYear + '_' + dashMonth;
   let hasCached = false;
@@ -1362,25 +1362,31 @@ async function loadDashboard() {
       renderDashboard(cached);
       hasCached = true;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn("[dashboard] Ошибка чтения кэша", e);
+  }
 
   // Если кэша нет — показываем спиннер
-  if (!hasCached) {
-    document.getElementById('dashboard-body').innerHTML =
+  if (!hasCached && dbBody) {
+    dbBody.innerHTML =
       `<div class="empty-state">
         <div class="spin" style="width:28px;height:28px;border-width:2px"></div>
       </div>`;
   }
 
+  // Увеличиваем ID текущего запроса для предотвращения race conditions
+  const thisRequestId = ++currentDashboardRequestId;
+
   // Запрашиваем свежие данные в фоне
   const data = await fetchDashboard(dashMonth, dashYear);
   
-  if (requestId !== _dashRequestId) return;
+  // Если за это время пользователь переключил месяц — прекращаем обработку
+  if (thisRequestId !== currentDashboardRequestId) return;
 
   if (!data) {
-    // Если совсем нет данных — показываем ошибку
-    if (!hasCached) {
-      document.getElementById('dashboard-body').innerHTML =
+    // Если сетевой запрос провалился и кэша нет — показываем ошибку
+    if (!hasCached && dbBody) {
+      dbBody.innerHTML =
         `<div class="empty-state">
           <div class="empty-ico">⚠️</div>
           <div class="empty-title">Нет данных</div>
@@ -1390,12 +1396,14 @@ async function loadDashboard() {
     return;
   }
 
-  // Сохраняем в кэш
+  // Сохраняем свежие данные в кэш
   try {
     localStorage.setItem(cacheKey, JSON.stringify(data));
-  } catch (e) {}
+  } catch (e) {
+    console.warn("[dashboard] Ошибка записи в кэш", e);
+  }
 
-  // Перерисовываем с актуальными данными
+  // Перерисовываем экран с актуальными данными
   renderDashboard(data);
 }
 
@@ -1404,14 +1412,23 @@ function dashShiftMonth(delta) {
   if (dashMonth > 12) { dashMonth = 1;  dashYear++; }
   if (dashMonth < 1)  { dashMonth = 12; dashYear--; }
   const now = new Date();
-  document.getElementById('db-month-next').disabled =
-    dashMonth === now.getMonth() + 1 && dashYear === now.getFullYear();
-  document.getElementById('db-month-label').textContent = MONTH_NAMES[dashMonth] + ' ' + dashYear;
+  
+  const nextBtn = document.getElementById('db-month-next');
+  if (nextBtn) {
+    nextBtn.disabled = dashMonth === now.getMonth() + 1 && dashYear === now.getFullYear();
+  }
+  
+  const labelEl = document.getElementById('db-month-label');
+  if (labelEl) {
+    labelEl.textContent = MONTH_NAMES[dashMonth] + ' ' + dashYear;
+  }
+  
   loadDashboard();
 }
 
 function renderDashboard(d) {
-  document.getElementById('db-month-label').textContent = MONTH_NAMES[d.month] + ' ' + d.year;
+  const labelEl = document.getElementById('db-month-label');
+  if (labelEl) labelEl.textContent = MONTH_NAMES[d.month] + ' ' + d.year;
   const fmt = v => (+v || 0).toFixed(2).replace('.', ',');
 
   let html = `<div class="db-cards">
@@ -1490,7 +1507,9 @@ function renderDashboard(d) {
   }
 
   html += `<div style="height:16px"></div>`;
-  document.getElementById('dashboard-body').innerHTML = html;
+  
+  const dbBody = document.getElementById('dashboard-body');
+  if (dbBody) dbBody.innerHTML = html;
 }
 
 function submitFinance(finType) {
@@ -1507,7 +1526,7 @@ function submitFinance(finType) {
     async () => {
       const result = await sendActionToGAS({ action: 'add_finance', fin_type: finType, amount, note });
       if (result) {
-        amountEl.value = '';
+        if (amountEl) amountEl.value = '';
         if (noteEl) noteEl.value = '';
         showToast(isIncome ? '💰 Доход записан' : '💸 Расход записан');
         loadDashboard();
@@ -1600,7 +1619,6 @@ async function init() {
 
   } catch (globalErr) {
     console.error("[init critical fallback]", globalErr);
-    // Резервный безотказный запуск приложения при непредвиденном JS-сбое
     document.getElementById('loader').style.display = 'none';
     document.getElementById('app').style.display    = 'flex';
     switchTab('orders', document.querySelectorAll('.tab-bar .tb')[0]);
