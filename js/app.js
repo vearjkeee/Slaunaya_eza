@@ -50,9 +50,6 @@ let lastBackPress = 0;
 // Счётчик запросов для предотвращения race conditions на дашборде
 let currentDashboardRequestId = 0;
 
-// Переменная для хранения последних загруженных данных дашборда
-let _lastDashData = null;
-
 // ══════════════════════════════════════════════════════════
 // ЛОКАЛЬНЫЙ КЭШ
 // ══════════════════════════════════════════════════════════
@@ -1338,8 +1335,8 @@ async function saveDishEdit() {
 // ══════════════════════════════════════════════════════════
 let dashMonth = new Date().getMonth() + 1;
 let dashYear  = new Date().getFullYear();
+
 const MONTH_NAMES = ["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
-let _lastDashData = null;
 
 async function loadDashboard() {
   const now = new Date();
@@ -1383,9 +1380,11 @@ async function loadDashboard() {
   // Запрашиваем свежие данные в фоне
   const data = await fetchDashboard(dashMonth, dashYear);
   
+  // Если за это время пользователь переключил месяц — прекращаем обработку
   if (thisRequestId !== currentDashboardRequestId) return;
 
   if (!data) {
+    // Если сетевой запрос провалился и кэша нет — показываем ошибку
     if (!hasCached && dbBody) {
       dbBody.innerHTML =
         `<div class="empty-state">
@@ -1397,12 +1396,14 @@ async function loadDashboard() {
     return;
   }
 
+  // Сохраняем свежие данные в кэш
   try {
     localStorage.setItem(cacheKey, JSON.stringify(data));
   } catch (e) {
     console.warn("[dashboard] Ошибка записи в кэш", e);
   }
 
+  // Перерисовываем экран с актуальными данными
   renderDashboard(data);
 }
 
@@ -1426,15 +1427,13 @@ function dashShiftMonth(delta) {
 }
 
 function renderDashboard(d) {
-  _lastDashData = d;
-
   const labelEl = document.getElementById('db-month-label');
   if (labelEl) labelEl.textContent = MONTH_NAMES[d.month] + ' ' + d.year;
   const fmt = v => (+v || 0).toFixed(2).replace('.', ',');
 
   let html = `<div class="db-cards">
-    <div class="db-card db-card-main" onclick="showRevenueOrders()" style="cursor:pointer;user-select:none">
-      <div class="db-card-label">Выручка <span style="float:right;font-size:10px;opacity:0.65;font-weight:400">список ›</span></div>
+    <div class="db-card db-card-main">
+      <div class="db-card-label">Выручка</div>
       <div class="db-card-value">${fmt(d.revenue_total)} <span class="db-byn">BYN</span></div>
       <div class="db-card-sub">${d.orders_count} заказ(ов)${d.revenue_extra > 0 ? ' + ' + fmt(d.revenue_extra) + ' вне бота' : ''}</div>
     </div>
@@ -1511,95 +1510,6 @@ function renderDashboard(d) {
   
   const dbBody = document.getElementById('dashboard-body');
   if (dbBody) dbBody.innerHTML = html;
-}
-
-// ══════════════════════════════════════════════════════════
-// СПИСОК ЗАКАЗОВ ВЫРУЧКИ
-// ══════════════════════════════════════════════════════════
-function showRevenueOrders() {
-  const allOrders = [...ACTIVE_ORDERS, ...ARCHIVE_ORDERS];
-
-  // Встроенный разбор даты формата DD.MM.YYYY для сортировки
-  const parseDateToMs = str => {
-    if (!str) return 0;
-    const parts = str.split('.').map(Number);
-    if (parts.length < 3) return 0;
-    return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
-  };
-
-  // Встроенный безопасный маппинг классов статусов
-  const getStatusClass = s => {
-    return ({
-      [ST.NEW]:  "st-new",
-      [ST.CONF]: "st-conf",
-      [ST.COOK]: "st-cook",
-      [ST.DONE]: "st-done",
-      [ST.CANC]: "st-canc"
-    })[s] || '';
-  };
-
-  // Фильтруем по event_date текущего месяца дашборда, исключая отменённые
-  const monthOrders = allOrders
-    .filter(o => {
-      if (!o.event_date) return false;
-      const p = o.event_date.split('.');
-      return p.length >= 3 &&
-             parseInt(p[1], 10) === dashMonth &&
-             parseInt(p[2], 10) === dashYear;
-    })
-    .filter(o => o.status !== ST.CANC)
-    .sort((a, b) => parseDateToMs(a.event_date) - parseDateToMs(b.event_date));
-
-  const fmt = v => (+v || 0).toFixed(2);
-
-  let html = '';
-
-  if (!monthOrders.length) {
-    html = `<div style="padding:24px 16px;text-align:center;color:var(--hint);font-size:14px">
-      Заказов за ${MONTH_NAMES[dashMonth]} ${dashYear} не найдено
-    </div>`;
-  } else {
-    const total = monthOrders.reduce((s, o) => s + (+o.total || 0), 0);
-
-    html = monthOrders.map(o => {
-      const sc = getStatusClass(o.status);
-      return `<div class="row-item" style="cursor:pointer"
-                   onclick="closeModal();setTimeout(()=>openOrderDetail(${o.row}),150)">
-        <div class="ri-body">
-          <div class="ri-label" style="font-weight:600">${esc(o.client)}</div>
-          <div class="ri-sub" style="margin-top:3px">
-            ${esc(o.event_date)}${o.event_time ? ' в ' + esc(o.event_time) : ''}
-            &nbsp;<span class="oc-badge ${sc}" style="font-size:10px;padding:2px 6px">${esc(o.status)}</span>
-          </div>
-        </div>
-        <div class="ri-right" style="font-size:14px;font-weight:700;color:var(--acc-d)">
-          ${fmt(o.total)}<span style="font-size:11px;font-weight:400;color:var(--hint)"> BYN</span>
-        </div>
-      </div>`;
-    }).join('');
-
-    // Итоговая строка
-    html += `<div style="display:flex;justify-content:space-between;align-items:center;
-                          padding:12px 14px;border-top:1px solid var(--border);
-                          font-size:14px;font-weight:700;color:var(--text)">
-      <span>${monthOrders.length} заказ(ов)</span>
-      <span style="color:var(--acc-d)">${fmt(total)} BYN</span>
-    </div>`;
-
-    // Если есть доход вне бота — добавляем строку
-    if (_lastDashData?.revenue_extra > 0) {
-      html += `<div style="display:flex;justify-content:space-between;align-items:center;
-                            padding:6px 14px 12px;font-size:12px;color:var(--hint)">
-        <span>+ вне бота</span>
-        <span>+${fmt(_lastDashData.revenue_extra)} BYN</span>
-      </div>`;
-    }
-  }
-
-  document.getElementById('modal-title').textContent =
-    `Выручка · ${MONTH_NAMES[dashMonth]} ${dashYear}`;
-  document.getElementById('modal-body').innerHTML = html;
-  document.getElementById('modal').classList.add('on');
 }
 
 function submitFinance(finType) {
