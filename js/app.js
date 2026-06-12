@@ -1374,6 +1374,8 @@ async function loadDashboard() {
 
   // Запрашиваем свежие данные в фоне
   const data = await fetchDashboard(dashMonth, dashYear);
+  
+  if (requestId !== _dashRequestId) return;
 
   if (!data) {
     // Если совсем нет данных — показываем ошибку
