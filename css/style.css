@@ -265,9 +265,13 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 .ci-pe{display:flex;align-items:center;gap:6px}
 .ci-pi{width:68px;height:30px;text-align:center;font-size:13px;border-radius:var(--rad-s);border:1px solid var(--border);background:var(--bg2);color:var(--text);padding:0 4px;font-family:inherit}
 .ci-pi:focus{border-color:var(--acc);outline:none}
+.ci-unit-sel{height:30px;font-size:12px;border-radius:var(--rad-s);border:1px solid var(--border);background:var(--bg2);color:var(--text);padding:0 4px;font-family:inherit;cursor:pointer;max-width:62px}
+.ci-unit-sel:focus{border-color:var(--acc);outline:none}
 .ci-unit{font-size:12px;color:var(--hint)}
 .ci-total{font-size:14px;font-weight:600;color:var(--acc-d)}
 .cart-footer{flex-shrink:0;background:var(--bg);border-top:0.5px solid var(--border);padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+.edit-save-bar{flex-shrink:0;background:var(--bg);border-top:0.5px solid var(--border);padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+.edit-save-bar .sv-btn{margin-top:0}
 .cf-lines{margin-bottom:10px}
 .cf-line{display:flex;justify-content:space-between;font-size:13px;color:var(--hint);margin-bottom:4px}
 .cf-total{display:flex;justify-content:space-between;align-items:baseline;padding-top:8px;border-top:0.5px solid var(--border);margin-top:4px}
@@ -325,6 +329,34 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 .orders-search-wrap{padding:8px 12px;background:var(--bg);border-bottom:0.5px solid var(--border);flex-shrink:0}
 .orders-srch{width:100%;height:36px;border:1px solid var(--border);border-radius:20px;padding:0 14px;font-size:14px;font-family:inherit;color:var(--text);background:var(--bg2);outline:none;transition:border-color .15s}
 .orders-srch:focus{border-color:var(--acc)}
+
+/* ══ P3: КАЛЕНДАРЬ-ТЕПЛОКАРТА ═══════════════════════════ */
+.cal-spoiler{flex-shrink:0;background:var(--bg);border-bottom:0.5px solid var(--border)}
+.cal-spoiler-hdr{width:100%;height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border:none;background:transparent;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;font-family:inherit}
+.cal-spoiler-arrow{font-size:18px;color:var(--hint);transition:transform .2s;display:inline-block}
+.cal-spoiler.open .cal-spoiler-arrow{transform:rotate(90deg)}
+.cal-spoiler-body{display:none;padding:8px 12px 10px}
+.cal-spoiler.open .cal-spoiler-body{display:block}
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-nav-btn{width:32px;height:32px;border:1px solid var(--border);background:var(--bg2);border-radius:var(--rad-s);font-size:16px;color:var(--text);cursor:pointer;font-family:inherit;flex-shrink:0}
+.cal-nav-btn:active{background:var(--acc-l)}
+.cal-nav-label{font-size:14px;font-weight:600;color:var(--text)}
+.cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
+.cal-weekdays span{text-align:center;font-size:10px;font-weight:600;color:var(--hint);padding:2px 0}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-cell{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:5px;cursor:pointer;position:relative;border:1px solid transparent;font-family:inherit;background:var(--bg2)}
+.cal-cell.gap{background:transparent;pointer-events:none}
+.cal-cell:not(.gap):active{transform:scale(0.94)}
+.cal-cell .cal-num{font-size:12px;font-weight:600;color:var(--text);line-height:1}
+.cal-cell .cal-cnt{font-size:9px;color:var(--acc-d);font-weight:700;line-height:1;margin-top:2px}
+.cal-cell.today{border-color:var(--acc)}
+.cal-cell.selected{background:var(--acc) !important;border-color:var(--acc-d)}
+.cal-cell.selected .cal-num,.cal-cell.selected .cal-cnt{color:#fff}
+.cal-legend{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px;font-size:10px;color:var(--hint)}
+.cal-legend-cells{display:flex;gap:2px}
+.cal-legend-cell{width:14px;height:14px;border-radius:3px}
+.cal-filter-info{display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding:6px 10px;background:var(--acc-l);border-radius:var(--rad-s);font-size:12px;color:var(--text)}
+.cal-filter-clear{border:none;background:transparent;color:var(--acc-d);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:underline}
 .search-results-badge{font-size:11px;color:var(--hint);padding:4px 14px 0;flex-shrink:0}
 
 /* ══ ПУСТОЙ СТЕЙТ ═══════════════════════════════════════ */
@@ -536,10 +568,46 @@ select.f-input{padding-right:32px;background-image:url("data:image/svg+xml,%3Csv
 .db-card-exp   {background:var(--red-l);   color:var(--red)}
 .db-card-profit{background:var(--grn-l);   color:var(--grn)}
 .db-card-loss  {background:var(--red-l);   color:var(--red)}
+.db-card-clickable{cursor:pointer;transition:transform .1s,opacity .15s}
+.db-card-clickable:active{transform:scale(0.97);opacity:.85}
+
+/* ══ P4: МОДАЛКА ВЫРУЧКИ ═════════════════════════════════ */
+.rev-summary{background:var(--bg2);border-radius:var(--rad);padding:12px 14px;margin-bottom:12px}
+.rev-sum-row{display:flex;justify-content:space-between;font-size:13px;color:var(--text);padding:3px 0}
+.rev-sum-row span:last-child{font-weight:600}
+.rev-sum-total{border-top:1px solid var(--border);margin-top:6px;padding-top:8px;font-size:15px;font-weight:700}
+.rev-sum-total span:last-child{color:var(--acc)}
+.rev-empty{text-align:center;padding:32px 16px;color:var(--hint);font-size:14px}
+.rev-orders-hdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--hint);padding:0 2px 8px}
+.rev-orders{display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.rev-order{background:var(--bg);border:1px solid var(--border);border-radius:var(--rad-s);padding:10px 12px}
+.rev-o-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+.rev-o-client{font-size:14px;font-weight:600;color:var(--text)}
+.rev-o-total{font-size:14px;font-weight:700;color:var(--acc-d);flex-shrink:0}
+.rev-o-date{font-size:12px;color:var(--hint);margin-bottom:1px}
+.rev-o-deliv{font-size:12px;color:var(--hint);margin-bottom:1px}
+.rev-o-dishes{font-size:12px;color:var(--hint)}
+.rev-o-note{font-size:12px;color:var(--text);background:rgba(255,248,220,0.7);border-radius:4px;padding:4px 6px;margin-top:4px;line-height:1.4}
 
 /* ══ КОРЗИНА — DRAG HANDLE ══════════════════════════════ */
 .ci-drag{width:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text);opacity:0.55;font-size:16px;cursor:grab;touch-action:none;padding-right:4px;user-select:none}
 .ci-drag:active{cursor:grabbing}
+
+/* ══ P5: ЛИСТ КУХНИ ═══════════════════════════════════════ */
+.sheet-card{background:var(--bg);border-radius:var(--rad);margin:8px 12px;padding:12px 12px 12px 8px;box-shadow:var(--shadow);display:flex;gap:8px}
+.sheet-check{flex-shrink:0;width:22px;height:22px;border:2px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .1s,border-color .1s;margin-top:2px}
+.sheet-check.on{background:var(--acc);border-color:var(--acc)}
+.sheet-check.on::after{content:'✓';color:#fff;font-size:14px;font-weight:700;line-height:1}
+.sheet-cb{flex:1;min-width:0}
+.sheet-cb-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px}
+.sheet-cb-client{font-size:15px;font-weight:700;color:var(--text)}
+.sheet-cb-date{font-size:12px;color:var(--hint);flex-shrink:0}
+.sheet-cb-deliv{font-size:12px;color:var(--hint);margin-bottom:6px}
+.sheet-cb-dishes{border-top:0.5px solid var(--border);padding-top:6px}
+.sheet-dish{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--text);padding:2px 0;line-height:1.3}
+.sheet-dish-name{flex:1;min-width:0}
+.sheet-dish-qty{flex-shrink:0;color:var(--acc-d);font-weight:600;white-space:nowrap}
+.sheet-gen-bar{flex-shrink:0;background:var(--bg);border-top:0.5px solid var(--border);padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
 
 .sh-unrec { background:rgba(255,193,7,.08) !important; border-left:3px solid #ffc107; }
 .sh-raw   { font-size:11px; color:var(--hint); font-style:italic; margin-top:2px; }
