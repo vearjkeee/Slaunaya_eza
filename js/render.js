@@ -109,8 +109,28 @@ function renderOrders(activeOrders, archiveOrders, currentTab, searchQuery) {
   const bdg = document.getElementById('bdg-orders');
   if (!el) return;
 
+  // P3: обновляем теплокарту календаря свежими данными
+  if (typeof renderCalendar === 'function') renderCalendar();
+
   bdg.textContent = activeOrders.length;
   bdg.classList.toggle('on', activeOrders.length > 0);
+
+  // P3: фильтр по дню из календаря — показывает заказы за этот день из обоих списков
+  if (calDayFilter) {
+    let dayList = [...activeOrders, ...archiveOrders].filter(o => (o.event_date || '') === calDayFilter);
+    if (!dayList.length) {
+      el.innerHTML = `<div class="empty-state">
+        <div class="empty-ico">🗓</div>
+        <div class="empty-title">За ${calDayFilter} заказов нет</div>
+        <div class="empty-sub">Выберите другой день в календаре</div>
+      </div>`;
+    } else {
+      el.innerHTML = `<div class="search-results-badge">За ${calDayFilter} · ${dayList.length}</div>` +
+        dayList.map(o => orderCardHTML(o, false)).join('');
+      attachSwipeHandlers(el);
+    }
+    return;
+  }
 
   let list = currentTab === 'active' ? activeOrders : archiveOrders;
 
@@ -140,6 +160,72 @@ function renderOrders(activeOrders, archiveOrders, currentTab, searchQuery) {
     renderActiveGrouped(el, list);
   } else {
     renderArchiveList(el, list);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// P3: КАЛЕНДАРЬ-ТЕПЛОКАРТА
+// ══════════════════════════════════════════════════════════
+const CAL_MONTH_NAMES = ["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+
+function renderCalendar() {
+  const grid  = document.getElementById('cal-grid');
+  const label = document.getElementById('cal-month-label');
+  if (!grid || !label) return;
+
+  label.textContent = CAL_MONTH_NAMES[calMonth] + ' ' + calYear;
+
+  // Считаем заказы по event_date за этот месяц (активные + архив)
+  const counts = {};
+  [...ACTIVE_ORDERS, ...ARCHIVE_ORDERS].forEach(o => {
+    const d = o.event_date || '';
+    if (!d) return;
+    const parts = d.split('.');
+    if (parts.length < 3) return;
+    if (parts[1] !== String(calMonth).padStart(2,'0') || parts[2] !== String(calYear)) return;
+    counts[d] = (counts[d] || 0) + 1;
+  });
+
+  const maxCount = Math.max(1, ...Object.values(counts));
+  const pad = n => String(n).padStart(2,'0');
+  const today = new Date();
+  const todayStr = pad(today.getDate()) + '.' + pad(today.getMonth()+1) + '.' + today.getFullYear();
+
+  // День недели первого числа (Пн=0 .. Вс=6)
+  const firstDay = new Date(calYear, calMonth - 1, 1);
+  const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+  let startWeekday = firstDay.getDay() - 1;
+  if (startWeekday < 0) startWeekday = 6;
+
+  let html = '';
+  for (let i = 0; i < startWeekday; i++) {
+    html += '<div class="cal-cell gap"></div>';
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = pad(day) + '.' + pad(calMonth) + '.' + calYear;
+    const count = counts[dateStr] || 0;
+    const intensity = count > 0 ? (0.15 + (count / maxCount) * 0.63) : 0;
+    const bg = count > 0 ? ` style="background:rgba(216,90,48,${intensity})"` : '';
+    const classes = ['cal-cell'];
+    if (dateStr === todayStr) classes.push('today');
+    if (dateStr === calDayFilter) classes.push('selected');
+    html += `<div class="${classes.join(' ')}"${bg} onclick="selectCalDay('${dateStr}')">
+      <span class="cal-num">${day}</span>
+      ${count > 0 ? `<span class="cal-cnt">${count}</span>` : ''}
+    </div>`;
+  }
+  grid.innerHTML = html;
+
+  // Инфо о фильтре
+  const filterInfo = document.getElementById('cal-filter-info');
+  const filterText = document.getElementById('cal-filter-text');
+  if (filterInfo && filterText) {
+    if (calDayFilter) {
+      filterText.textContent = 'Фильтр: ' + calDayFilter;
+      filterInfo.style.display = 'flex';
+    } else {
+      filterInfo.style.display = 'none';
+    }
   }
 }
 
@@ -521,6 +607,133 @@ function renderMenuEdit(menu, query, activeCat) {
       <div class="me-arr">›</div>
     </div>`
   ).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// P5: ЛИСТ КУХНИ — список активных заказов с составом + чекбоксы
+// ══════════════════════════════════════════════════════════
+function renderSheet() {
+  const el  = document.getElementById('sheet-list');
+  const sub = document.getElementById('sheet-sub');
+  if (!el) return;
+
+  // Сортируем активные по дате мероприятия (ближайшие сверху)
+  const list = [...ACTIVE_ORDERS].sort((a, b) => {
+    const da = parseDateNum(a.event_date);
+    const db = parseDateNum(b.event_date);
+    if (da !== db) return da - db;
+    return String(a.event_time || '').localeCompare(String(b.event_time || ''));
+  });
+
+  if (sub) sub.textContent = list.length + ' заказ' + (list.length === 1 ? '' : 'ов');
+
+  if (!list.length) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-ico">🧾</div>
+      <div class="empty-title">Активных заказов нет</div>
+      <div class="empty-sub">Создайте заказ во вкладке ➕</div>
+    </div>`;
+    updateSheetGenBar();
+    return;
+  }
+
+  el.innerHTML = list.map(o => sheetCardHTML(o)).join('');
+  updateSheetGenBar();
+}
+
+function sheetCardHTML(o) {
+  const dishes = o.dishes || [];
+  const sel = sheetSelected[o.row] ? ' on' : '';
+  const dateStr = (o.event_date || '—') + (o.event_time ? ' в ' + esc(o.event_time) : '');
+  const deliv = o.delivery_type === 'Доставка' && o.address
+    ? '🚗 Доставка · ' + esc(o.address)
+    : '🚗 ' + esc(o.delivery_type || 'Самовывоз');
+
+  let dishesHtml = '';
+  if (dishes.length) {
+    dishesHtml = '<div class="sheet-cb-dishes">';
+    dishes.forEach(d => {
+      const qtyStr = fmtQty(d.qty) + ' ' + esc(d.unit || '');
+      dishesHtml += `<div class="sheet-dish">
+        <span class="sheet-dish-name">${esc(d.name)}</span>
+        <span class="sheet-dish-qty">×${qtyStr}</span>
+      </div>`;
+    });
+    dishesHtml += '</div>';
+  } else {
+    dishesHtml = '<div class="sheet-cb-dishes"><div class="sheet-dish" style="color:var(--hint)">Состав не загружен — обновите кеш</div></div>';
+  }
+
+  const noteHtml = (o.note && o.note.trim())
+    ? `<div class="rev-o-note" style="margin-top:6px">💬 ${esc(o.note)}</div>`
+    : '';
+
+  return `<div class="sheet-card" data-row="${o.row}">
+    <div class="sheet-check${sel}" onclick="toggleSheetOrder(${o.row})"></div>
+    <div class="sheet-cb">
+      <div class="sheet-cb-top">
+        <div class="sheet-cb-client">${esc(o.client || '—')}</div>
+        <div class="sheet-cb-date">📅 ${dateStr}</div>
+      </div>
+      <div class="sheet-cb-deliv">${deliv}</div>
+      ${dishesHtml}
+      ${noteHtml}
+    </div>
+  </div>`;
+}
+
+function updateSheetGenBar() {
+  const bar   = document.getElementById('sheet-gen-bar');
+  const count = document.getElementById('sheet-gen-count');
+  const btn   = document.getElementById('sheet-gen-btn');
+  const n = Object.keys(sheetSelected).filter(k => sheetSelected[k]).length;
+  if (count) count.textContent = n;
+  if (bar) bar.style.display = n > 0 ? 'block' : 'none';
+  if (btn) btn.disabled = n === 0;
+}
+
+// ══════════════════════════════════════════════════════════
+// P4: МОДАЛКА ВЫРУЧКИ — список заказов месяца
+// ══════════════════════════════════════════════════════════
+function renderRevenueModal(d) {
+  const fmt = v => (+v || 0).toFixed(2).replace('.', ',');
+  let html = '';
+
+  // Сводка
+  html += `<div class="rev-summary">
+    <div class="rev-sum-row"><span>Заказов выполнено</span><span>${d.orders_count}</span></div>
+    <div class="rev-sum-row"><span>Выручка по заказам</span><span>${fmt(d.revenue_orders)} BYN</span></div>
+    ${d.revenue_extra > 0 ? `<div class="rev-sum-row"><span>Доход вне бота</span><span>+${fmt(d.revenue_extra)} BYN</span></div>` : ''}
+    <div class="rev-sum-row rev-sum-total"><span>Итого выручка</span><span>${fmt(d.revenue_total)} BYN</span></div>
+  </div>`;
+
+  // Список заказов месяца (только те, что засчитал GAS — выполненные с event_date в месяце)
+  const orders = d.month_orders || [];
+  if (!orders.length) {
+    html += `<div class="rev-empty">В этом месяце нет выполненных заказов</div>`;
+  } else {
+    html += `<div class="rev-orders-hdr">Заказы месяца (${orders.length})</div>`;
+    html += `<div class="rev-orders">`;
+    orders.forEach(o => {
+      const dateStr = o.event_date + (o.event_time ? ' в ' + o.event_time : '');
+      const deliv = o.delivery_type === 'Доставка' && o.address
+        ? 'Доставка · ' + o.address
+        : (o.delivery_type || 'Самовывоз');
+      html += `<div class="rev-order">
+        <div class="rev-o-top">
+          <div class="rev-o-client">${esc(o.client || '—')}</div>
+          <div class="rev-o-total">${fmt(o.total)} BYN</div>
+        </div>
+        <div class="rev-o-date">📅 ${esc(dateStr)}</div>
+        <div class="rev-o-deliv">🚗 ${esc(deliv)}</div>
+        ${o.dishes_count ? `<div class="rev-o-dishes">🍽 ${o.dishes_count} поз.</div>` : ''}
+        ${o.note ? `<div class="rev-o-note">💬 ${esc(o.note)}</div>` : ''}
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  return html;
 }
 
 // ══════════════════════════════════════════════════════════
