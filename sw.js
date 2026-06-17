@@ -5,7 +5,7 @@
 // GAS-запросы идут network-first с fallback на cache.
 // ══════════════════════════════════════════════════════════
 
-const CACHE_VERSION = '1.1.8'; // Обновлено для принудительного сброса кэша клиентов
+const CACHE_VERSION = '1.5.0'; // P5: таб «Лист» — список заказов с составом + JPG-генератор
 const CACHE_NAME    = 'slaunaya-shell-' + CACHE_VERSION;
 const GAS_CACHE     = 'slaunaya-gas-'   + CACHE_VERSION;
 
@@ -18,6 +18,7 @@ const SHELL_FILES = [
   '/Slaunaya_eza/js/render.js',
   '/Slaunaya_eza/js/app.js',
   '/Slaunaya_eza/js/receipt.js',
+  '/Slaunaya_eza/js/sheet.js',
   '/Slaunaya_eza/icons/logo.png', // Унифицировано с PNG
   '/Slaunaya_eza/manifest.json',
 ];
