@@ -12,6 +12,9 @@ const ST = {
   COOK: "🍳 Готовится", DONE: "✔️ Выполнен", CANC: "❌ Отменён",
 };
 
+// P6: Доступные единицы измерения в корзине и редакторе блюда.
+const UNITS = ['порц.', 'шт', 'кг'];
+
 // ══════════════════════════════════════════════════════════
 // ГЛОБАЛЬНОЕ СОСТОЯНИЕ
 // ══════════════════════════════════════════════════════════
@@ -37,18 +40,24 @@ let searchQuery      = '';
 let menuEditQuery    = '';
 let menuEditCat      = 'Все';
 
+// P3: состояние календаря-теплокарты
+let calMonth         = new Date().getMonth() + 1;
+let calYear          = new Date().getFullYear();
+let calSpoilerOpen   = false;
+let calDayFilter     = null; // "dd.mm.yyyy" или null
+
+// P5: состояние листа кухни — выбранные заказы {row: bool}
+let sheetSelected    = {};
+
 // Ключи локального хранилища
 const CACHE_KEY           = 'slaunaya_data_cache_v2';
 const STATE_KEY           = 'slaunaya_screen_state_v2';
 const DRAFT_KEY           = 'order_draft_v1';
 const SHOPPING_BOUGHT_KEY = 'shopping_bought_v1';
-const DASH_CACHE_KEY      = 'slaunaya_dash_v1';
+const DASH_CACHE_KEY      = 'slaunaya_dash_cache_v2'; // P4+: кэш дашборда по месяцам. v2 — с month_orders.
 
 // Переменная времени для ловушки кнопки «Назад»
 let lastBackPress = 0;
-
-// Счётчик запросов для предотвращения race conditions на дашборде
-let currentDashboardRequestId = 0;
 
 // ══════════════════════════════════════════════════════════
 // ЛОКАЛЬНЫЙ КЭШ
@@ -106,7 +115,7 @@ function restoreLastScreen() {
     currentOrderRow = state.currentOrderRow || null;
     editingRow      = state.editingRow || null;
 
-    const tabIndexMap = { orders:1, new:2, shopping:3, dashboard:4, menu:5 };
+    const tabIndexMap = { orders:1, new:2, shopping:3, dashboard:4, menu:5, sheet:6 };
     const btnIdx = tabIndexMap[currentTab] || 1;
     const btn    = document.querySelectorAll('.tab-bar .tb')[btnIdx - 1];
     _silentSwitchTab(currentTab, btn, state.activeScreenId);
@@ -221,12 +230,13 @@ function applyDraft(d) {
   document.getElementById('o-time').value    = d.time    || '';
   document.getElementById('o-addr').value    = d.addr    || '';
   document.getElementById('o-dcost').value   = d.dcost   || '';
-  document.getElementById('c-note').value    = d.note    || '';
+  document.getElementById('c-note').value    = d.note    || ''; // ИСПРАВЛЕНО (1.2)
   setDeliv(d.delivType || 'Самовывоз', null, true);
   setPay(!!d.prepay, null, true);
   cart      = d.cart      || {};
   cartOrder = d.cartOrder || Object.keys(d.cart || {});
   editingRow = d.editingRow || null;
+  updateEditSaveBar();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -269,7 +279,7 @@ async function forceReload() {
 // НАВИГАЦИЯ & СИНХРОНИЗАЦИЯ С HISTORY API
 // ══════════════════════════════════════════════════════════
 function tabRoots() {
-  return { orders:'s-orders', new:'s-new-details', shopping:'s-shopping', dashboard:'s-dashboard', menu:'s-menu' };
+  return { orders:'s-orders', new:'s-new-details', shopping:'s-shopping', dashboard:'s-dashboard', menu:'s-menu', sheet:'s-sheet' };
 }
 
 function switchTab(tab, btn) {
@@ -283,8 +293,9 @@ function switchTab(tab, btn) {
   if (btn) {
     btn.classList.add('on');
   } else {
-    const tabIndexMap = { orders:1, new:2, shopping:3, dashboard:4, menu:5 };
-    const btnIdx = tabIndexMap[tab] || 1;
+    // Резервный выбор кнопки навигации, если объект не передан напрямую
+    const tabIndexMap = { orders:1, new:2, shopping:3, dashboard:4, menu:5, sheet:6 };
+    const btnIdx = tabIndexMap[currentTab] || 1;
     const backupBtn = document.querySelectorAll('.tab-bar .tb')[btnIdx - 1];
     if (backupBtn) backupBtn.classList.add('on');
   }
@@ -389,6 +400,7 @@ function renderCurrentTab() {
   if (currentTab === 'shopping')  renderShopping(SHOPPING);
   if (currentTab === 'menu')      { renderMenuChips(); renderMenuEdit(MENU, menuEditQuery, menuEditCat); }
   if (currentTab === 'dashboard') loadDashboard();
+  if (currentTab === 'sheet')     renderSheet();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -401,6 +413,36 @@ function setOrderTab(tab, btn) {
   renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
 }
 
+// ══════════════════════════════════════════════════════════
+// P3: КАЛЕНДАРЬ-ТЕПЛОКАРТА
+// ══════════════════════════════════════════════════════════
+function toggleCalendarSpoiler() {
+  calSpoilerOpen = !calSpoilerOpen;
+  document.getElementById('cal-spoiler').classList.toggle('open', calSpoilerOpen);
+  if (calSpoilerOpen) renderCalendar();
+}
+
+function calShiftMonth(delta) {
+  calMonth += delta;
+  if (calMonth > 12) { calMonth = 1;  calYear++; }
+  if (calMonth < 1)  { calMonth = 12; calYear--; }
+  renderCalendar();
+}
+
+function selectCalDay(dateStr) {
+  // Клик по тому же дню — сброс
+  calDayFilter = (calDayFilter === dateStr) ? null : dateStr;
+  renderCalendar();
+  renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
+}
+
+function clearCalDayFilter() {
+  calDayFilter = null;
+  renderCalendar();
+  renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
+}
+
+// ИСПРАВЛЕНО (5.3) - Оптимизированный поиск заказов с Debounce
 let _orderSearchTimer;
 function onOrderSearch() {
   clearTimeout(_orderSearchTimer);
@@ -524,7 +566,7 @@ function duplicateOrder(row) {
       d: { id, name: d.name, cat: menuDish?.cat || '' },
       q: +d.qty || 1,
       p: +d.price || 0,
-      cost: +d.cost || (menuDish ? +menuDish.cost : 0),
+      cost: +d.cost || (menuDish ? +menuDish.cost : 0), // ИСПРАВЛЕНО (1.1)
       unit: d.unit || menuDish?.unit || (!menuDish ? 'шт' : 'порц.'),
       manual: !menuDish,
     };
@@ -553,10 +595,17 @@ function duplicateOrder(row) {
 // ══════════════════════════════════════════════════════════
 // РЕДАКТИРОВАНИЕ ЗАКАЗА
 // ══════════════════════════════════════════════════════════
+// P2: показывать sticky-кнопку «Сохранить изменения» на Шаге 1 только при редактировании.
+function updateEditSaveBar() {
+  const bar = document.getElementById('edit-save-bar');
+  if (bar) bar.style.display = editingRow ? 'block' : 'none';
+}
+
 function openEditOrder() {
   const order = findOrder(currentOrderRow);
   if (!order) return;
   editingRow = order.row;
+  updateEditSaveBar();
 
   document.getElementById('o-client').value  = order.client || '';
   document.getElementById('o-contact').value = order.contact || '';
@@ -584,7 +633,7 @@ function openEditOrder() {
         d: { id, name: d.name, cat: menuDish?.cat || '' },
         q: +d.qty || 1,
         p: +d.price || 0,
-        cost: +d.cost || (menuDish ? +menuDish.cost : 0),
+        cost: +d.cost || (menuDish ? +menuDish.cost : 0), // ИСПРАВЛЕНО (1.1)
         unit: d.unit || menuDish?.unit || (!menuDish ? 'шт' : 'порц.'),
         manual: !menuDish,
       };
@@ -603,6 +652,7 @@ function openEditOrder() {
 // ══════════════════════════════════════════════════════════
 function initNewOrder() {
   editingRow = null;
+  updateEditSaveBar();
   cart = {};
   cartOrder = [];
   ['o-client','o-contact','o-date','o-time','o-addr','o-dcost'].forEach(id => {
@@ -612,7 +662,7 @@ function initNewOrder() {
   const aiTxt = document.getElementById('ai-txt');
   if (aiTxt) aiTxt.value = '';
   
-  const noteTxt = document.getElementById('c-note');
+  const noteTxt = document.getElementById('c-note'); // ИСПРАВЛЕНО (1.2)
   if (noteTxt) noteTxt.value = '';
   
   setDeliv('Самовывоз', null, true);
@@ -639,6 +689,7 @@ function setPay(v, btn, silent) {
   );
 }
 
+// ИСПРАВЛЕНО (5.3) - Оптимизированный поиск клиентов с Debounce
 let _clientInputTimer;
 function onClientInput() {
   saveDraft();
@@ -678,6 +729,7 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.cw')) document.getElementById('c-drop').classList.remove('on');
 });
 
+// ИСПРАВЛЕНО (4.1) - AI Импорт с предупреждением о перезаписи товаров
 async function runAI() {
   const txt = document.getElementById('ai-txt').value.trim();
   if (!txt) { showToast('Вставьте сообщение клиента'); return; }
@@ -751,7 +803,7 @@ function applyAIResultToForm(res) {
         d: { id, name: d.name, cat: menuDish?.cat || 'ИИ-Импорт' },
         q: +d.qty || 1,
         p: +d.price || (menuDish ? +menuDish.price : 0),
-        cost: +d.cost || (menuDish ? +menuDish.cost : 0),
+        cost: +d.cost || (menuDish ? +menuDish.cost : 0), // ИСПРАВЛЕНО (1.1)
         unit: d.unit || menuDish?.unit || 'порц.',
         manual: !menuDish
       };
@@ -789,6 +841,7 @@ function buildChips(containerId, menu, filterFn) {
   });
 }
 
+// ИСПРАВЛЕНО (5.3) - Оптимизированный рендеринг меню с Debounce
 let _menuSearchTimer;
 function filterMenu() {
   clearTimeout(_menuSearchTimer);
@@ -834,7 +887,7 @@ function addToCart(id) {
       d: { id, name: d.name, cat: d.cat || '' },
       q: 0,
       p: +d.price || 0,
-      cost: +d.cost || 0,
+      cost: +d.cost || 0, // ИСПРАВЛЕНО (1.1)
       unit: d.unit || 'порц.',
     };
     cartOrder.push(id);
@@ -871,7 +924,7 @@ function addManual() {
   if (!name)    { showToast('Укажите название'); return; }
   if (price <= 0) { showToast('Укажите цену'); return; }
   const id = 'm' + (manualId++);
-  cart[id] = { d:{id, name, cat:'Вручную'}, q:qty, p:price, cost:0, manual:true, unit:'шт' };
+  cart[id] = { d:{id, name, cat:'Вручную'}, q:qty, p:price, cost:0, manual:true, unit:'шт' }; // ИСПРАВЛЕНО (1.1)
   cartOrder.push(id);
   document.getElementById('m-name').value  = '';
   document.getElementById('m-price').value = '';
@@ -908,7 +961,7 @@ function renderCartFull() {
   if (noteW) noteW.style.display = 'block';
   sv.disabled = false;
 
-  const discount = draftDiscount;
+  const discount = draftDiscount; // ИСПРАВЛЕНО (1.3)
 
   items.innerHTML = `<div class="discount-wrap">
     <span class="dw-l">Скидка</span>
@@ -919,6 +972,8 @@ function renderCartFull() {
   keys.map(k => {
     const it = cart[k];
     const { step } = getUnitStepAndMin(it.unit);
+    // P6: если у позиции «наследственная» единица не из UNITS — показываем её тоже, чтобы не потерять.
+    const opts = UNITS.includes(it.unit) ? UNITS : [it.unit, ...UNITS];
 
     return `<div class="ci" id="ci-${k}" draggable="false" data-key="${k}">
       <div class="ci-top">
@@ -929,11 +984,14 @@ function renderCartFull() {
       <div class="ci-bot">
         <div class="ci-pe">
           <div class="qc">
-            <button class="qb" onclick="chCartQ('${k}',-${step})">−</button>
+            <button class="qb" onclick="chCartQ('${k}',-1)">−</button>
             <input class="qv" type="number" value="${it.q}" step="${step}" min="${step}"
               oninput="chCartQInput('${k}', this.value)"/>
-            <button class="qb" onclick="chCartQ('${k}',${step})">+</button>
+            <button class="qb" onclick="chCartQ('${k}',1)">+</button>
           </div>
+          <select class="ci-unit-sel" onchange="chCartUnit('${k}', this.value)">
+            ${opts.map(u => `<option value="${u}"${u===it.unit?' selected':''}>${u}</option>`).join('')}
+          </select>
           <span class="ci-unit" style="margin:0 4px">×</span>
           <input class="ci-pi" type="number" value="${it.p.toFixed(2)}" step="0.5" min="0"
             onchange="chCartPrice('${k}',this.value)"/>
@@ -1039,11 +1097,11 @@ function getUnitStepAndMin(unit) {
   };
 }
 
-function chCartQ(id, d) {
+function chCartQ(id, dir) {
   if (!cart[id]) return;
-  const { min } = getUnitStepAndMin(cart[id].unit);
-  
-  let newQ = Math.round((cart[id].q + d) * 100) / 100;
+  const { step, min } = getUnitStepAndMin(cart[id].unit);
+  // P6: dir — направление (±1); step берётся из текущей единицы, чтобы кнопки адаптировались при смене unit.
+  let newQ = Math.round((cart[id].q + dir * step) * 100) / 100;
   if (newQ < min) {
     newQ = min;
   }
@@ -1062,6 +1120,25 @@ function chCartQ(id, d) {
   saveDraft();
   updCart();
   
+  if (typeof filterMenu === 'function') filterMenu();
+}
+
+function chCartUnit(id, newUnit) {
+  if (!cart[id]) return;
+  cart[id].unit = newUnit;
+  const { step, min } = getUnitStepAndMin(newUnit);
+  // P6: при смене весовой↔штучная — если qty меньше нового min, подтягиваем вверх.
+  if (cart[id].q < min) cart[id].q = min;
+  const qv = document.querySelector(`#ci-${CSS.escape(id)} .qv`);
+  if (qv && qv.tagName === 'INPUT') {
+    qv.step = String(step);
+    qv.min = String(min);
+    qv.value = cart[id].q;
+  }
+  const t = document.getElementById('cit-' + id);
+  if (t) t.textContent = '= ' + (cart[id].q * cart[id].p).toFixed(2) + ' BYN';
+  saveDraft();
+  updCart();
   if (typeof filterMenu === 'function') filterMenu();
 }
 
@@ -1160,7 +1237,7 @@ async function saveOrder() {
       name:  cart[k].d.name,
       qty:   cart[k].q,
       price: cart[k].p,
-      cost:  cart[k].cost || 0,
+      cost:  cart[k].cost || 0, // ИСПРАВЛЕНО (1.1)
       unit:  cart[k].unit || 'порц.',
     })),
   };
@@ -1302,7 +1379,17 @@ function openDishEdit(id) {
   document.getElementById('de-cat').value   = d?.cat   || '';
   document.getElementById('de-price').value = d?.price || '';
   document.getElementById('de-cost').value  = d?.cost  || '';
-  document.getElementById('de-unit').value  = d?.unit  || 'порц.';
+  // P6: сохраняем «наследственную» единицу, если её нет в списке из 3 — добавляем опцию, чтобы не потерять молча.
+  const unitSel = document.getElementById('de-unit');
+  const wantUnit = d?.unit || 'порц.';
+  unitSel.value = wantUnit;
+  if (unitSel.value !== wantUnit) {
+    const extra = document.createElement('option');
+    extra.value = wantUnit;
+    extra.textContent = wantUnit;
+    extra.selected = true;
+    unitSel.appendChild(extra);
+  }
   const dl = document.getElementById('cat-list');
   dl.innerHTML = [...new Set(MENU.map(m => m.cat).filter(Boolean))]
     .map(c => `<option value="${esc(c)}">`).join('');
@@ -1331,10 +1418,52 @@ async function saveDishEdit() {
 }
 
 // ══════════════════════════════════════════════════════════
-// ДАШБОРД (ФИНАНСЫ)
+// P5: ЛИСТ КУХНИ — выбор заказов и генерация JPG
+// ══════════════════════════════════════════════════════════
+function toggleSheetOrder(row) {
+  sheetSelected[row] = !sheetSelected[row];
+  if (!sheetSelected[row]) delete sheetSelected[row];
+  // обновляем чекбокс без полной перерисовки
+  const card = document.querySelector(`.sheet-card[data-row="${row}"] .sheet-check`);
+  if (card) card.classList.toggle('on', !!sheetSelected[row]);
+  updateSheetGenBar();
+}
+
+function sheetSelectAll() {
+  const allRows = ACTIVE_ORDERS.map(o => o.row);
+  const allSelected = allRows.length > 0 && allRows.every(r => sheetSelected[r]);
+  if (allSelected) {
+    sheetSelected = {};
+  } else {
+    allRows.forEach(r => sheetSelected[r] = true);
+  }
+  renderSheet();
+  const btn = document.getElementById('sheet-select-all');
+  if (btn) btn.textContent = allSelected ? 'Все' : 'Снять';
+}
+
+function generateSheet() {
+  const selectedRows = Object.keys(sheetSelected).filter(k => sheetSelected[k]).map(Number);
+  const orders = selectedRows
+    .map(r => findOrder(r))
+    .filter(o => o)
+    .sort((a, b) => {
+      const da = parseDateNum(a.event_date);
+      const db = parseDateNum(b.event_date);
+      if (da !== db) return da - db;
+      return String(a.event_time || '').localeCompare(String(b.event_time || ''));
+    });
+  if (!orders.length) { showToast('Выберите хотя бы один заказ'); return; }
+  showSheetModal(orders);
+}
+
+// ══════════════════════════════════════════════════════════
+// ДАШБОРД
 // ══════════════════════════════════════════════════════════
 let dashMonth = new Date().getMonth() + 1;
 let dashYear  = new Date().getFullYear();
+let lastDashData = null; // P4: последние данные дашборда для модалки выручки
+let currentDashboardRequestId = 0; // P4+: защита от race conditions при быстром переключении месяцев
 
 const MONTH_NAMES = ["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
 
@@ -1346,7 +1475,7 @@ async function loadDashboard() {
   const nextBtn = document.getElementById('db-month-next');
   if (nextBtn) nextBtn.disabled = isCurrentOrFuture;
 
-  // Лейбл выставляем сразу — до любого запроса
+  // Лейбл выставляем сразу — до любого запроса (исправляет "сначала Май, потом актуальный")
   const labelEl = document.getElementById('db-month-label');
   if (labelEl) labelEl.textContent = MONTH_NAMES[dashMonth] + ' ' + dashYear;
 
@@ -1359,7 +1488,7 @@ async function loadDashboard() {
     const raw = localStorage.getItem(cacheKey);
     if (raw) {
       const cached = JSON.parse(raw);
-      renderDashboard(cached);
+      renderDashboard(cached); // внутри обновится lastDashData для модалки P4
       hasCached = true;
     }
   } catch (e) {
@@ -1379,7 +1508,7 @@ async function loadDashboard() {
 
   // Запрашиваем свежие данные в фоне
   const data = await fetchDashboard(dashMonth, dashYear);
-  
+
   // Если за это время пользователь переключил месяц — прекращаем обработку
   if (thisRequestId !== currentDashboardRequestId) return;
 
@@ -1412,28 +1541,28 @@ function dashShiftMonth(delta) {
   if (dashMonth > 12) { dashMonth = 1;  dashYear++; }
   if (dashMonth < 1)  { dashMonth = 12; dashYear--; }
   const now = new Date();
-  
+
   const nextBtn = document.getElementById('db-month-next');
   if (nextBtn) {
     nextBtn.disabled = dashMonth === now.getMonth() + 1 && dashYear === now.getFullYear();
   }
-  
+
   const labelEl = document.getElementById('db-month-label');
   if (labelEl) {
     labelEl.textContent = MONTH_NAMES[dashMonth] + ' ' + dashYear;
   }
-  
+
   loadDashboard();
 }
 
 function renderDashboard(d) {
-  const labelEl = document.getElementById('db-month-label');
-  if (labelEl) labelEl.textContent = MONTH_NAMES[d.month] + ' ' + d.year;
+  lastDashData = d; // P4: сохраняем для модалки выручки
+  document.getElementById('db-month-label').textContent = MONTH_NAMES[d.month] + ' ' + d.year;
   const fmt = v => (+v || 0).toFixed(2).replace('.', ',');
 
   let html = `<div class="db-cards">
-    <div class="db-card db-card-main">
-      <div class="db-card-label">Выручка</div>
+    <div class="db-card db-card-main db-card-clickable" onclick="openRevenueModal()">
+      <div class="db-card-label">Выручка · нажмите для деталей</div>
       <div class="db-card-value">${fmt(d.revenue_total)} <span class="db-byn">BYN</span></div>
       <div class="db-card-sub">${d.orders_count} заказ(ов)${d.revenue_extra > 0 ? ' + ' + fmt(d.revenue_extra) + ' вне бота' : ''}</div>
     </div>
@@ -1507,9 +1636,20 @@ function renderDashboard(d) {
   }
 
   html += `<div style="height:16px"></div>`;
-  
-  const dbBody = document.getElementById('dashboard-body');
-  if (dbBody) dbBody.innerHTML = html;
+  document.getElementById('dashboard-body').innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════
+// P4: МОДАЛКА ВЫРУЧКИ — список заказов месяца
+// ══════════════════════════════════════════════════════════
+function openRevenueModal() {
+  const d = lastDashData;
+  if (!d) { showToast('Данные ещё загружаются'); return; }
+
+  const title = 'Выручка · ' + MONTH_NAMES[d.month] + ' ' + d.year;
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = renderRevenueModal(d);
+  document.getElementById('modal').classList.add('on');
 }
 
 function submitFinance(finType) {
@@ -1526,7 +1666,7 @@ function submitFinance(finType) {
     async () => {
       const result = await sendActionToGAS({ action: 'add_finance', fin_type: finType, amount, note });
       if (result) {
-        if (amountEl) amountEl.value = '';
+        amountEl.value = '';
         if (noteEl) noteEl.value = '';
         showToast(isIncome ? '💰 Доход записан' : '💸 Расход записан');
         loadDashboard();
@@ -1578,8 +1718,6 @@ async function init() {
 
     const cachedTime  = loadLocalCache();
     const hasLocalData = MENU.length > 0 || ACTIVE_ORDERS.length > 0;
-    const _dbLbl = document.getElementById('db-month-label');
-    if (_dbLbl) _dbLbl.textContent = MONTH_NAMES[dashMonth] + ' ' + dashYear;
 
     if (hasLocalData) {
       document.getElementById('loader').style.display = 'none';
@@ -1619,6 +1757,7 @@ async function init() {
 
   } catch (globalErr) {
     console.error("[init critical fallback]", globalErr);
+    // Резервный безотказный запуск приложения при непредвиденном JS-сбое
     document.getElementById('loader').style.display = 'none';
     document.getElementById('app').style.display    = 'flex';
     switchTab('orders', document.querySelectorAll('.tab-bar .tb')[0]);
