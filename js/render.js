@@ -708,7 +708,14 @@ function renderRevenueModal(d) {
   </div>`;
 
   // Список заказов месяца (только те, что засчитал GAS — выполненные с event_date в месяце)
-  const orders = d.month_orders || [];
+  // Сортировка по дате мероприятия от ранней к поздней (parseDateNum парсит dd.mm.yyyy → YYYYMMDD).
+  const orders = (d.month_orders || []).slice().sort((a, b) => {
+    const da = parseDateNum(a.event_date);
+    const db = parseDateNum(b.event_date);
+    if (da !== db) return da - db;
+    // при равных датах — по времени
+    return String(a.event_time || '').localeCompare(String(b.event_time || ''));
+  });
   if (!orders.length) {
     html += `<div class="rev-empty">В этом месяце нет выполненных заказов</div>`;
   } else {
