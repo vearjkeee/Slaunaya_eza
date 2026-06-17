@@ -18,7 +18,7 @@
 
 <link rel="manifest" href="manifest.json"/>
 <link rel="apple-touch-icon" href="icons/logo.png"/>
-<link rel="stylesheet" href="css/style.css?v=3"/>
+<link rel="stylesheet" href="css/style.css?v=10"/>
 </head>
 <body>
 
@@ -100,6 +100,38 @@
         <input class="orders-srch" id="order-srch" type="text"
                placeholder="Поиск по клиенту, блюду, адресу…"
                oninput="onOrderSearch()"/>
+      </div>
+      <!-- P3: спойлер-календарь с тепловой картой заказов -->
+      <div class="cal-spoiler" id="cal-spoiler">
+        <button class="cal-spoiler-hdr" onclick="toggleCalendarSpoiler()">
+          <span class="cal-spoiler-title">📅 Календарь заказов</span>
+          <span class="cal-spoiler-arrow" id="cal-spoiler-arrow">‹</span>
+        </button>
+        <div class="cal-spoiler-body" id="cal-spoiler-body">
+          <div class="cal-nav">
+            <button class="cal-nav-btn" onclick="calShiftMonth(-1)">‹</button>
+            <span class="cal-nav-label" id="cal-month-label">—</span>
+            <button class="cal-nav-btn" onclick="calShiftMonth(1)">›</button>
+          </div>
+          <div class="cal-weekdays">
+            <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+          <div class="cal-legend">
+            <span>меньше</span>
+            <div class="cal-legend-cells">
+              <div class="cal-legend-cell" style="background:rgba(216,90,48,0.15)"></div>
+              <div class="cal-legend-cell" style="background:rgba(216,90,48,0.35)"></div>
+              <div class="cal-legend-cell" style="background:rgba(216,90,48,0.55)"></div>
+              <div class="cal-legend-cell" style="background:rgba(216,90,48,0.78)"></div>
+            </div>
+            <span>больше</span>
+          </div>
+          <div class="cal-filter-info" id="cal-filter-info" style="display:none">
+            <span id="cal-filter-text"></span>
+            <button class="cal-filter-clear" onclick="clearCalDayFilter()">✕ Сбросить</button>
+          </div>
+        </div>
       </div>
       <div class="scroll" id="orders-list"></div>
     </div>
@@ -226,6 +258,10 @@
         </div>
         <div style="height:16px"></div>
       </div>
+      <!-- P2: sticky-кнопка сохранения на Шаге 1, видна только при редактировании заказа -->
+      <div class="edit-save-bar" id="edit-save-bar" style="display:none">
+        <button class="sv-btn" style="margin-top:0" onclick="saveOrder()">Сохранить изменения</button>
+      </div>
     </div>
 
     <!-- ══ ШАГ 2: КАТАЛОГ ═══════════════════════════════════ -->
@@ -342,7 +378,7 @@
     <div class="scr" id="s-dashboard">
       <div class="db-month-bar">
         <button class="db-month-btn" onclick="dashShiftMonth(-1)">‹</button>
-        <div class="db-month-label" id="db-month-label"></div>
+        <div class="db-month-label" id="db-month-label">Май 2026</div>
         <button class="db-month-btn" onclick="dashShiftMonth(1)" id="db-month-next">›</button>
       </div>
       <div class="scroll" id="dashboard-body">
@@ -420,14 +456,29 @@
                 <option value="порц.">порц.</option>
                 <option value="шт">шт</option>
                 <option value="кг">кг</option>
-                <option value="г">г</option>
-                <option value="л">л</option>
-                <option value="мл">мл</option>
               </select>
             </div>
           </div>
         </div>
         <div style="height:20px"></div>
+      </div>
+    </div>
+
+    <!-- ══ ВКЛАДКА 6: ЛИСТ КУХНИ ═════════════════════════════ -->
+    <div class="scr" id="s-sheet">
+      <div class="hdr" style="padding-right:12px">
+        <div class="hdr-body" style="padding-left:14px">
+          <div class="hdr-title">Лист кухни</div>
+          <div class="hdr-sub" id="sheet-sub">0 заказов</div>
+        </div>
+        <button class="hdr-btn ghost" onclick="sheetSelectAll()" id="sheet-select-all" style="flex-shrink:0">Все</button>
+      </div>
+      <div class="scroll" id="sheet-list"></div>
+      <!-- P5: sticky-бар генерации листа -->
+      <div class="sheet-gen-bar" id="sheet-gen-bar" style="display:none">
+        <button class="sv-btn" style="margin-top:0" id="sheet-gen-btn" onclick="generateSheet()">
+          🧾 Сгенерировать лист (<span id="sheet-gen-count">0</span>)
+        </button>
       </div>
     </div>
 
@@ -452,13 +503,17 @@
     <button class="tb" onclick="switchTab('menu',this)">
       <span class="tb-ico">🍽</span><span>Меню</span>
     </button>
+    <button class="tb" onclick="switchTab('sheet',this)">
+      <span class="tb-ico">🧾</span><span>Лист</span>
+    </button>
   </div>
 
 </div><!-- /app -->
 
-<script src="js/api.js?v=3"></script>
-<script src="js/render.js?v=3"></script>
-<script src="js/receipt.js?v=3"></script>
-<script src="js/app.js?v=3"></script>
+<script src="js/api.js?v=10"></script>
+<script src="js/render.js?v=10"></script>
+<script src="js/receipt.js?v=10"></script>
+<script src="js/sheet.js?v=10"></script>
+<script src="js/app.js?v=10"></script>
 </body>
 </html>
