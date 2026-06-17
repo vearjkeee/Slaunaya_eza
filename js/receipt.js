@@ -47,8 +47,15 @@ async function showReceiptModal(row) {
   body.innerHTML = `<div class="receipt-spinner"><div class="spin"></div><div style="margin-top:12px;color:var(--hint);font-size:13px">Генерируем предчек высокого качества…</div></div>`;
   modal.classList.add("on");
 
-  document.getElementById("rb-save").disabled  = true;
-  document.getElementById("rb-share").disabled = true;
+  // P5: восстанавливаем заголовок и обработчики (могли быть подменены листом кухни)
+  const titleEl = modal.querySelector(".receipt-modal-title");
+  if (titleEl) titleEl.textContent = "Предчек";
+  const saveBtn  = document.getElementById("rb-save");
+  const shareBtn = document.getElementById("rb-share");
+  saveBtn.onclick  = receiptSave;
+  shareBtn.onclick = receiptShare;
+  saveBtn.disabled  = true;
+  shareBtn.disabled = true;
 
   // ИСПРАВЛЕНО (5.5) — Обернуто в setTimeout для мгновенного плавного открытия модала со спиннером
   setTimeout(async () => {
@@ -216,6 +223,11 @@ function _drawReceipt(ctx, order, logo, canvasH) {
   const cQtyR   = cPriceR - 20 * PT_MM;
   const nameW   = cQtyR - ML - pad - 16 * PT_MM;
 
+  // P1: отдельный правый край для лейблов строк итогов («Итого по блюдам», «Скидка», «Доставка»).
+  // 32 мм запаса, чтобы 4-значная сумма (напр. 9999.99 BYN) не наезжала на лейбл.
+  // Колонку цен в таблице блюд (cPriceR) НЕ трогаем — там 24 мм, как было.
+  const cSumLblR = cSumR - 32 * PT_MM;
+
   ctx.fillStyle = RC.dark;
   ctx.font = "bold 8.5pt sans-serif";
   ctx.fillText("НАИМЕНОВАНИЕ", ML + pad, y + thH * 0.6);
@@ -268,7 +280,7 @@ function _drawReceipt(ctx, order, logo, canvasH) {
   _hairline(ctx, ML, y, W - MR, 0.4, RC.ink);
   y += 3 * PT_MM;
 
-  _sumRow(ctx, "Итого по блюдам:", subtotal.toFixed(2) + " BYN", cPriceR, cSumR, y, true);
+  _sumRow(ctx, "Итого по блюдам:", subtotal.toFixed(2) + " BYN", cSumLblR, cSumR, y, true);
   y += 7 * PT_MM;
 
   const discP = parseFloat(order.discount_percent) || 0;
@@ -276,7 +288,7 @@ function _drawReceipt(ctx, order, logo, canvasH) {
   if (discP > 0) {
     ctx.fillStyle = RC.discBg;
     ctx.fillRect(ML, y, CW, 7 * PT_MM);
-    _sumRow(ctx, `Скидка ${discP}%:`, `−${discA.toFixed(2)} BYN`, cPriceR, cSumR, y, false, RC.discFg);
+    _sumRow(ctx, `Скидка ${discP}%:`, `−${discA.toFixed(2)} BYN`, cSumLblR, cSumR, y, false, RC.discFg);
     y += 7 * PT_MM;
   }
 
@@ -284,7 +296,7 @@ function _drawReceipt(ctx, order, logo, canvasH) {
   if (delivery > 0) {
     ctx.fillStyle = RC.delivBg;
     ctx.fillRect(ML, y, CW, 7 * PT_MM);
-    _sumRow(ctx, "Доставка:", delivery.toFixed(2) + " BYN", cPriceR, cSumR, y);
+    _sumRow(ctx, "Доставка:", delivery.toFixed(2) + " BYN", cSumLblR, cSumR, y);
     y += 7 * PT_MM;
   }
 
