@@ -305,7 +305,7 @@ function orderCardHTML(o, withSwipe) {
     </div>
     <div class="oc-bot">
       <span class="oc-badge ${sc}">${esc(o.status)}</span>
-      ${o.delivery_type ? `<span class="oc-tag">${esc(o.delivery_type)}</span>` : ''}
+      ${o.delivery_type ? `<span class="oc-tag oc-tag-deliv ${o.delivery_type === 'Доставка' ? 'deliv' : 'pickup'}"><span class="oc-tag-ico">${o.delivery_type === 'Доставка' ? '🚗' : '🏠'}</span>${esc(o.delivery_type)}</span>` : ''}
       ${o.dishes_count  ? `<span class="oc-tag">${o.dishes_count} поз.</span>` : ''}
       <span class="oc-arr">›</span>
     </div>
