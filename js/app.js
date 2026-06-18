@@ -60,6 +60,17 @@ const DASH_CACHE_KEY      = 'slaunaya_dash_cache_v2'; // P4+: кэш дашбо�
 let lastBackPress = 0;
 
 // ══════════════════════════════════════════════════════════
+// ПЕРЕКЛЮЧЕНИЕ ТЕМЫ (светлая/тёмная, с запоминанием)
+// ══════════════════════════════════════════════════════════
+function toggleTheme() {
+  const root = document.documentElement;
+  const cur  = root.getAttribute('data-theme') || 'light';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('se_theme', next); } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════════════
 // ЛОКАЛЬНЫЙ КЭШ
 // ══════════════════════════════════════════════════════════
 function loadLocalCache() {
@@ -128,6 +139,9 @@ function restoreLastScreen() {
 function _silentSwitchTab(tab, btn, targetScreenId) {
   document.querySelectorAll('.tb').forEach(b => b?.classList.remove('on'));
   if (btn) btn.classList.add('on');
+
+  // Синхронизируем маркер вкладки для палитры фоновых пятен
+  document.body.dataset.tab = tab;
 
   document.querySelectorAll('.scr').forEach(s => {
     s.classList.remove('on', 'back');
@@ -285,7 +299,10 @@ function tabRoots() {
 function switchTab(tab, btn) {
   screenStack = [];
   currentTab  = tab;
-  
+
+  // Маркер текущей вкладки для палитры фоновых пятен (только CSS, без логики)
+  document.body.dataset.tab = tab;
+
   window.history.replaceState({ tab: tab, stackLength: 0 }, '');
 
   document.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
@@ -1595,7 +1612,7 @@ function renderDashboard(d) {
         <input class="f-input" type="text" id="db-income-note" placeholder="Наличные, перевод…" style="margin-top:6px"/>
       </div>
       <div style="padding:0 14px 12px">
-        <button class="sv-btn" style="margin-top:0;height:40px;font-size:14px" onclick="submitFinance('income_extra')">Записать доход</button>
+        <button class="sv-btn sv-btn-grn" style="margin-top:0;height:40px;font-size:14px" onclick="submitFinance('income_extra')">Записать доход</button>
       </div>
     </div>
   </div>`;
