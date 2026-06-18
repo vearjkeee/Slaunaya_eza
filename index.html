@@ -18,9 +18,21 @@
 
 <link rel="manifest" href="manifest.json"/>
 <link rel="apple-touch-icon" href="icons/logo.png"/>
-<link rel="stylesheet" href="css/style.css?v=11"/>
+<link rel="stylesheet" href="css/style.css?v=12"/>
+<script>
+  // Тема до первого paint — чтобы не было мигания
+  (function(){
+    try {
+      var t = localStorage.getItem('se_theme');
+      if (!t) {
+        t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    } catch(e){}
+  })();
+</script>
 </head>
-<body>
+<body data-tab="orders">
 
 <!-- ══ ЛОАДЕР ══════════════════════════════════════════════ -->
 <div id="loader">
@@ -84,56 +96,68 @@
 <!-- ══ ОСНОВНОЕ ПРИЛОЖЕНИЕ ══════════════════════════════════ -->
 <div id="app" style="display:none">
 
+  <!-- Фоновые размытые пятна (дышат) -->
+  <div class="bg-blobs" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+  </div>
+
   <div class="screens" id="screens">
 
     <!-- ══ ВКЛАДКА 1: ЗАКАЗЫ ═══════════════════════════════ -->
     <div class="scr on" id="s-orders">
       <div class="cache-bar">
         <span class="cache-time" id="cache-time">—</span>
-        <button class="refresh-btn" onclick="forceReload()">↻ Обновить</button>
+        <div class="cache-bar-right">
+          <button class="theme-btn" onclick="toggleTheme()" aria-label="Сменить тему"><span class="theme-btn-ico">◐</span></button>
+          <button class="refresh-btn" onclick="forceReload()">↻ Обновить</button>
+        </div>
       </div>
-      <div style="display:flex;background:var(--bg);border-bottom:0.5px solid var(--border);flex-shrink:0">
-        <button class="f-tgl-btn on" id="tab-active"  onclick="setOrderTab('active',this)"  style="height:38px;font-size:13px;border-radius:0">Активные</button>
-        <button class="f-tgl-btn"    id="tab-archive" onclick="setOrderTab('archive',this)" style="height:38px;font-size:13px;border-radius:0">Архив</button>
+      <div class="order-tab-seg">
+        <button class="f-tgl-btn on" id="tab-active"  onclick="setOrderTab('active',this)">Активные</button>
+        <button class="f-tgl-btn"    id="tab-archive" onclick="setOrderTab('archive',this)">Архив</button>
       </div>
       <div class="orders-search-wrap">
         <input class="orders-srch" id="order-srch" type="text"
                placeholder="Поиск по клиенту, блюду, адресу…"
                oninput="onOrderSearch()"/>
       </div>
-      <!-- P3: спойлер-календарь с тепловой картой заказов -->
-      <div class="cal-spoiler" id="cal-spoiler">
-        <button class="cal-spoiler-hdr" onclick="toggleCalendarSpoiler()">
-          <span class="cal-spoiler-title">📅 Календарь заказов</span>
-          <span class="cal-spoiler-arrow" id="cal-spoiler-arrow">‹</span>
-        </button>
-        <div class="cal-spoiler-body" id="cal-spoiler-body">
-          <div class="cal-nav">
-            <button class="cal-nav-btn" onclick="calShiftMonth(-1)">‹</button>
-            <span class="cal-nav-label" id="cal-month-label">—</span>
-            <button class="cal-nav-btn" onclick="calShiftMonth(1)">›</button>
-          </div>
-          <div class="cal-weekdays">
-            <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
-          </div>
-          <div class="cal-grid" id="cal-grid"></div>
-          <div class="cal-legend">
-            <span>меньше</span>
-            <div class="cal-legend-cells">
-              <div class="cal-legend-cell" style="background:rgba(216,90,48,0.15)"></div>
-              <div class="cal-legend-cell" style="background:rgba(216,90,48,0.35)"></div>
-              <div class="cal-legend-cell" style="background:rgba(216,90,48,0.55)"></div>
-              <div class="cal-legend-cell" style="background:rgba(216,90,48,0.78)"></div>
+      <!-- P3: спойлер-календарь + список заказов в общем скролл-контейнере -->
+      <div class="scroll" id="orders-scroll">
+        <div class="cal-spoiler" id="cal-spoiler">
+          <button class="cal-spoiler-hdr" onclick="toggleCalendarSpoiler()">
+            <span class="cal-spoiler-title">📅 Календарь заказов</span>
+            <span class="cal-spoiler-arrow" id="cal-spoiler-arrow">‹</span>
+          </button>
+          <div class="cal-spoiler-body" id="cal-spoiler-body">
+            <div class="cal-nav">
+              <button class="cal-nav-btn" onclick="calShiftMonth(-1)">‹</button>
+              <span class="cal-nav-label" id="cal-month-label">—</span>
+              <button class="cal-nav-btn" onclick="calShiftMonth(1)">›</button>
             </div>
-            <span>больше</span>
-          </div>
-          <div class="cal-filter-info" id="cal-filter-info" style="display:none">
-            <span id="cal-filter-text"></span>
-            <button class="cal-filter-clear" onclick="clearCalDayFilter()">✕ Сбросить</button>
+            <div class="cal-weekdays">
+              <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
+            </div>
+            <div class="cal-grid" id="cal-grid"></div>
+            <div class="cal-legend">
+              <span>меньше</span>
+              <div class="cal-legend-cells">
+                <div class="cal-legend-cell" style="background:rgba(216,90,48,0.15)"></div>
+                <div class="cal-legend-cell" style="background:rgba(216,90,48,0.35)"></div>
+                <div class="cal-legend-cell" style="background:rgba(216,90,48,0.55)"></div>
+                <div class="cal-legend-cell" style="background:rgba(216,90,48,0.78)"></div>
+              </div>
+              <span>больше</span>
+            </div>
+            <div class="cal-filter-info" id="cal-filter-info" style="display:none">
+              <span id="cal-filter-text"></span>
+              <button class="cal-filter-clear" onclick="clearCalDayFilter()">✕ Сбросить</button>
+            </div>
           </div>
         </div>
+        <div id="orders-list"></div>
       </div>
-      <div class="scroll" id="orders-list"></div>
     </div>
 
     <!-- ══ ДЕТАЛИ ЗАКАЗА ════════════════════════════════════ -->
@@ -145,6 +169,7 @@
           <div class="hdr-sub"   id="od-sub"></div>
         </div>
         <div class="hdr-action">
+          <button class="theme-btn" onclick="toggleTheme()" aria-label="Сменить тему"><span class="theme-btn-ico">◐</span></button>
           <button class="hdr-btn ghost" onclick="openEditOrder()">Редакт.</button>
         </div>
       </div>
@@ -160,6 +185,7 @@
           <div class="hdr-sub" id="nd-sub">Шаг 1 из 3</div>
         </div>
         <div class="hdr-action">
+          <button class="theme-btn" onclick="toggleTheme()" aria-label="Сменить тему"><span class="theme-btn-ico">◐</span></button>
           <button class="hdr-btn acc" onclick="goToCatalog()">Меню →</button>
         </div>
       </div>
@@ -273,6 +299,7 @@
           <div class="hdr-sub" id="cat-sub">0 в корзине</div>
         </div>
         <div class="hdr-action">
+          <button class="theme-btn" onclick="toggleTheme()" aria-label="Сменить тему"><span class="theme-btn-ico">◐</span></button>
           <button class="hdr-btn acc" onclick="goToCart()">Корзина →</button>
         </div>
       </div>
@@ -350,7 +377,10 @@
     <div class="scr" id="s-shopping">
       <div class="cache-bar">
         <span class="cache-time" id="cache-time2">—</span>
-        <button class="refresh-btn" onclick="forceReload()">↻ Обновить</button>
+        <div class="cache-bar-right">
+          <button class="theme-btn" onclick="toggleTheme()" aria-label="Сменить тему"><span class="theme-btn-ico">◐</span></button>
+          <button class="refresh-btn" onclick="forceReload()">↻ Обновить</button>
+        </div>
       </div>
       <div class="sh-input-panel">
         <div class="sh-ta-wrap">
@@ -376,6 +406,13 @@
 
     <!-- ══ ВКЛАДКА 4: ДАШБОРД ════════════════════════════════ -->
     <div class="scr" id="s-dashboard">
+      <div class="hdr" style="padding-right:12px">
+        <div class="hdr-body" style="padding-left:14px">
+          <div class="hdr-title">Финансы</div>
+          <div class="hdr-sub" id="db-month-label-inline"></div>
+        </div>
+        <button class="theme-btn" onclick="toggleTheme()" aria-label="Сменить тему" style="flex-shrink:0"><span class="theme-btn-ico">◐</span></button>
+      </div>
       <div class="db-month-bar">
         <button class="db-month-btn" onclick="dashShiftMonth(-1)">‹</button>
         <div class="db-month-label" id="db-month-label">Май 2026</div>
@@ -395,6 +432,7 @@
           <div class="hdr-title">Редактор меню</div>
           <div class="hdr-sub" id="menu-edit-sub">0 блюд</div>
         </div>
+        <button class="theme-btn" onclick="toggleTheme()" aria-label="Сменить тему" style="flex-shrink:0;margin-right:6px"><span class="theme-btn-ico">◐</span></button>
         <button class="hdr-btn acc" onclick="openNewDishForm()" style="flex-shrink:0">+ Добавить</button>
       </div>
       <div class="srch-wrap">
@@ -413,6 +451,7 @@
           <div class="hdr-title" id="dish-edit-title">Новое блюдо</div>
         </div>
         <div class="hdr-action">
+          <button class="theme-btn" onclick="toggleTheme()" aria-label="Сменить тему"><span class="theme-btn-ico">◐</span></button>
           <button class="hdr-btn acc" onclick="saveDishEdit()">Сохранить</button>
         </div>
       </div>
@@ -471,6 +510,7 @@
           <div class="hdr-title">Лист кухни</div>
           <div class="hdr-sub" id="sheet-sub">0 заказов</div>
         </div>
+        <button class="theme-btn" onclick="toggleTheme()" aria-label="Сменить тему" style="flex-shrink:0;margin-right:6px"><span class="theme-btn-ico">◐</span></button>
         <button class="hdr-btn ghost" onclick="sheetSelectAll()" id="sheet-select-all" style="flex-shrink:0">Все</button>
       </div>
       <div class="scroll" id="sheet-list"></div>
@@ -501,7 +541,7 @@
       <span class="tb-ico">📊</span><span>Финансы</span>
     </button>
     <button class="tb" onclick="switchTab('menu',this)">
-      <span class="tb-ico">🍽</span><span>Меню</span>
+      <span class="tb-ico">🍴</span><span>Меню</span>
     </button>
     <button class="tb" onclick="switchTab('sheet',this)">
       <span class="tb-ico">🧾</span><span>Лист</span>
