@@ -5,7 +5,7 @@
 // GAS-запросы идут network-first с fallback на cache.
 // ══════════════════════════════════════════════════════════
 
-const CACHE_VERSION = '1.5.1'; // P5: таб «Лист» — список заказов с составом + JPG-генератор
+const CACHE_VERSION = '1.5.2'; // P5: таб «Лист» — список заказов с составом + JPG-генератор
 const CACHE_NAME    = 'slaunaya-shell-' + CACHE_VERSION;
 const GAS_CACHE     = 'slaunaya-gas-'   + CACHE_VERSION;
 
