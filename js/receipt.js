@@ -34,6 +34,7 @@ const RC = {
 
 let _receiptBlob = null;
 let _receiptFilename = "предчек.jpg";
+let _receiptURL = null; // #6: активный blob URL — revoke перед каждым новым createObjectURL
 
 // ══════════════════════════════════════════════════════════
 // ТОЧКА ВХОДА — Открытие модального окна
@@ -41,6 +42,9 @@ let _receiptFilename = "предчек.jpg";
 async function showReceiptModal(row) {
   const order = findOrder(row);
   if (!order) { showToast("Заказ не найден"); return; }
+
+  // #4: синхронизируем currentOrderRow — иначе receiptShare возьмёт текст от другого заказа
+  currentOrderRow = row;
 
   const modal = document.getElementById("receipt-modal");
   const body  = document.getElementById("receipt-modal-body");
@@ -66,7 +70,10 @@ async function showReceiptModal(row) {
       _receiptBlob = blob;
       _receiptFilename = `предчек_${(order.client || "заказ").replace(/\s+/g, "_")}_${order.event_date || ""}.jpg`.replace(/[\\/:*?"<>|]/g, "");
 
+      // #6: освобождаем предыдущий blob URL перед созданием нового
+      if (_receiptURL) { URL.revokeObjectURL(_receiptURL); _receiptURL = null; }
       const url = URL.createObjectURL(blob);
+      _receiptURL = url;
       body.innerHTML = `<img id="receipt-img" src="${url}" alt="Предчек" style="width:100%;display:block;border-radius:4px"/>`;
 
       document.getElementById("rb-save").disabled  = false;
@@ -83,9 +90,11 @@ async function showReceiptModal(row) {
 function closeReceiptModal() {
   const modal = document.getElementById("receipt-modal");
   modal.classList.remove("on");
-  const img = document.getElementById("receipt-img");
-  if (img && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+  // #6: освобождаем активные blob URL (предчек или лист кухни)
+  if (_receiptURL) { URL.revokeObjectURL(_receiptURL); _receiptURL = null; }
+  if (typeof _sheetURL !== "undefined" && _sheetURL) { URL.revokeObjectURL(_sheetURL); _sheetURL = null; }
   _receiptBlob = null;
+  if (typeof _sheetBlob !== "undefined") _sheetBlob = null;
 }
 
 async function receiptSave() {
