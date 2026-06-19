@@ -30,6 +30,7 @@ const SHC = {
 
 let _sheetBlob = null;
 let _sheetFilename = "лист_кухни.jpg";
+let _sheetURL = null; // #6: активный blob URL — revoke перед каждым новым createObjectURL
 
 // ══════════════════════════════════════════════════════════
 // ТОЧКА ВХОДА — открыть модалку с листом
@@ -61,7 +62,10 @@ async function showSheetModal(orders) {
       const datePart = new Date().toISOString().slice(0,10);
       _sheetFilename = `лист_кухни_${datePart}_${orders.length}заказ(ов).jpg`.replace(/\s+/g,"_");
 
+      // #6: освобождаем предыдущий blob URL перед созданием нового
+      if (_sheetURL) { URL.revokeObjectURL(_sheetURL); _sheetURL = null; }
       const url = URL.createObjectURL(blob);
+      _sheetURL = url;
       body.innerHTML = `<img id="receipt-img" src="${url}" alt="Лист кухни" style="width:100%;display:block;border-radius:4px"/>`;
 
       document.getElementById("rb-save").disabled  = false;
