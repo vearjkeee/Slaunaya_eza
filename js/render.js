@@ -369,21 +369,24 @@ function renderOrderDetail(order, isActive) {
 
   let html = '';
 
-  // Статус
-  html += `<div class="sec" style="margin-top:12px">
-    <div class="sec-hdr">Статус</div>
-    <div class="sec-body">
-      <div class="row-item">
-        <div class="ri-ico">📌</div>
-        <div class="ri-body">
-          <div class="ri-label"><span class="oc-badge ${sc}">${esc(order.status)}</span></div>
-        </div>
-        ${isActive ? `<button class="hdr-btn ghost" onclick="openStatusModal(${order.row})">Изменить</button>` : ''}
-      </div>
+  // ══ HERO-блок: клиент + статус-пилюля (тапабельная) + ключевые данные ══
+  const eventStr = (order.event_date || '—') + (order.event_time ? ' в ' + esc(order.event_time) : '');
+  const delivLine = order.delivery_type === 'Доставка' && order.address
+    ? '🚗 Доставка · ' + esc(order.address)
+    : '🏠 ' + esc(order.delivery_type || 'Самовывоз');
+
+  html += `<div class="od-hero">
+    <div class="od-hero-top">
+      <div class="od-hero-client">${esc(order.client)}</div>
+      ${isActive
+        ? `<button class="od-status-pill ${sc}" onclick="openStatusModal(${order.row})">${esc(order.status)} <span class="od-pill-caret">▾</span></button>`
+        : `<span class="od-status-pill ${sc}" style="cursor:default">${esc(order.status)}</span>`}
     </div>
+    <div class="od-hero-row">📅 ${eventStr}</div>
+    <div class="od-hero-row">${delivLine}</div>
   </div>`;
 
-  // Кнопки действий
+  // ══ Кнопки действий — плитки сразу под hero ══
   const addrEnc = encodeURIComponent(order.address || '');
   if (isActive) {
     html += `<div class="actions cols2">
@@ -391,7 +394,7 @@ function renderOrderDetail(order, isActive) {
         <span class="act-ico">📄</span>Предчек
       </button>
       <button class="act-btn ab-grn" onclick="openMapChoice('${addrEnc}')">
-        <span class="act-ico">🗺</span>Маршрут
+        <span class="act-ico">🧭</span>Маршрут
       </button>
     </div>`;
   } else {
@@ -405,57 +408,39 @@ function renderOrderDetail(order, isActive) {
     </div>`;
   }
 
-  // Информация
-  html += `<div class="sec">
-    <div class="sec-hdr">Информация</div>
-    <div class="sec-body">
-      <div class="row-item">
-        <div class="ri-ico">👤</div>
-        <div class="ri-body">
-          <div class="ri-label">${esc(order.client)}</div>
-          <div class="ri-sub">Клиент</div>
-        </div>
+  // ══ Информация — компактная секция (без отдельного блока Статус) ══
+  let infoRows = '';
+  if (order.contact) infoRows += `
+    <div class="row-item">
+      <div class="ri-ico">📱</div>
+      <div class="ri-body">
+        <div class="ri-label">${esc(order.contact)}</div>
+        <div class="ri-sub">Способ связи</div>
       </div>
-      ${order.contact ? `
-      <div class="row-item">
-        <div class="ri-ico">📱</div>
-        <div class="ri-body">
-          <div class="ri-label">${esc(order.contact)}</div>
-          <div class="ri-sub">Способ связи</div>
-        </div>
-      </div>` : ''}
-      ${order.date_order ? `
-      <div class="row-item">
-        <div class="ri-ico">📝</div>
-        <div class="ri-body">
-          <div class="ri-label">${esc(order.date_order)}</div>
-          <div class="ri-sub">Дата создания</div>
-        </div>
-      </div>` : ''}
-      <div class="row-item">
-        <div class="ri-ico">📅</div>
-        <div class="ri-body">
-          <div class="ri-label">${esc(order.event_date||'—')}${order.event_time ? ' в ' + esc(order.event_time) : ''}</div>
-          <div class="ri-sub">Дата мероприятия</div>
-        </div>
+    </div>`;
+  if (order.date_order) infoRows += `
+    <div class="row-item">
+      <div class="ri-ico">📝</div>
+      <div class="ri-body">
+        <div class="ri-label">${esc(order.date_order)}</div>
+        <div class="ri-sub">Дата создания</div>
       </div>
-      <div class="row-item">
-        <div class="ri-ico">🚗</div>
-        <div class="ri-body">
-          <div class="ri-label">${esc(order.delivery_type||'—')}</div>
-          ${order.address ? `<div class="ri-sub">${esc(order.address)}</div>` : ''}
-        </div>
+    </div>`;
+  if (order.note && order.note.trim()) infoRows += `
+    <div class="row-item" style="background:rgba(255,248,220,0.7)">
+      <div class="ri-ico">💬</div>
+      <div class="ri-body">
+        <div class="ri-sub" style="margin-bottom:2px">Примечание</div>
+        <div class="ri-label" style="font-size:13px;line-height:1.4;white-space:pre-wrap">${esc(order.note)}</div>
       </div>
-      ${order.note && order.note.trim() ? `
-      <div class="row-item" style="background:rgba(255,248,220,0.7)">
-        <div class="ri-ico">💬</div>
-        <div class="ri-body">
-          <div class="ri-sub" style="margin-bottom:2px">Примечание</div>
-          <div class="ri-label" style="font-size:13px;line-height:1.4;white-space:pre-wrap">${esc(order.note)}</div>
-        </div>
-      </div>` : ''}
-    </div>
-  </div>`;
+    </div>`;
+
+  if (infoRows) {
+    html += `<div class="sec">
+      <div class="sec-hdr">Информация</div>
+      <div class="sec-body">${infoRows}</div>
+    </div>`;
+  }
 
   // Состав
   if (dishes.length) {
