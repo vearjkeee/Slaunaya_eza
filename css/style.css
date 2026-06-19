@@ -783,3 +783,32 @@ input.qv::-webkit-inner-spin-button {
 .step-seg.on {
   background: var(--acc);
 }
+
+/* ══════════════════════════════════════════════════════════
+   #5 iOS anti-zoom: все текстовые поля ≥16px
+   iOS Safari зумит страницу при фокусе на input с font-size<16px.
+   !important — перебивает все локальные размеры инпутов.
+   Кнопки/чипы/бейджи НЕ трогаем (они не вызывают зум).
+══════════════════════════════════════════════════════════ */
+input[type="text"], input[type="number"], input[type="date"],
+input[type="search"], input[type="tel"], input[type="email"],
+input[type="password"], input[type="url"],
+textarea, select {
+  font-size: 16px !important;
+}
+
+/* ══════════════════════════════════════════════════════════
+   #7 Расширение .is-animating на шапку и таб-бар
+   Во время перехода экранов отключаем backdrop-filter на ВСЕХ
+   стеклянных поверхностях (включая .hdr и .tab-bar, которые
+   находятся вне .scr и оставались «размытыми» — микрофризы).
+══════════════════════════════════════════════════════════ */
+body.is-animating .scr,
+body.is-animating .scr *,
+body.is-animating .hdr,
+body.is-animating .hdr *,
+body.is-animating .tab-bar,
+body.is-animating .tab-bar * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
