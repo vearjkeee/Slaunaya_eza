@@ -33,12 +33,12 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   --urgent:    #e74c3c;
   --soon:      #e67e22;
 
-  /* Glass-поверхности (светлая) */
+  /* Glass-поверхности (светлая) — оптимизировано для производительности */
   --glass-bg:      rgba(255,255,255,0.66);
   --glass-bg-strong: rgba(255,255,255,0.82);
   --glass-border:  rgba(255,255,255,0.70);
-  --glass-blur:    22px;
-  --glass-saturate:1.3;
+  --glass-blur:    14px;
+  --glass-saturate:1.1;
   --glass-shadow:  0 4px 20px rgba(0,0,0,0.08);
 
   /* Фоновые пятна — палитра по умолчанию (заказы = оранжевый) */
@@ -81,12 +81,12 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   --urgent:    #ff453a;
   --soon:      #ff9f0a;
 
-  /* Glass-поверхности (тёмная) */
+  /* Glass-поверхности (тёмная) — оптимизировано для производительности */
   --glass-bg:      rgba(32,32,38,0.66);
   --glass-bg-strong: rgba(40,40,48,0.84);
   --glass-border:  rgba(255,255,255,0.12);
-  --glass-blur:    24px;
-  --glass-saturate:1.5;
+  --glass-blur:    14px;
+  --glass-saturate:1.15;
   --glass-shadow:  0 4px 24px rgba(0,0,0,0.45);
 
   /* Фоновые пятна — более насыщенные в тёмной теме */
@@ -104,7 +104,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     --shadow:0 2px 12px rgba(0,0,0,0.4);
     --acc:#ff7a4d; --acc-l:rgba(255,122,77,0.16); --acc-d:#ff9a72;
     --glass-bg:rgba(30,30,36,0.62); --glass-bg-strong:rgba(38,38,46,0.80);
-    --glass-border:rgba(255,255,255,0.10); --glass-blur:24px; --glass-saturate:1.5;
+    --glass-border:rgba(255,255,255,0.10); --glass-blur:14px; --glass-saturate:1.15;
     --glass-shadow:0 4px 24px rgba(0,0,0,0.45);
     --blob-opacity:0.42;
     --blob-1-dim:rgba(255,122,77,0.42); --blob-2-dim:rgba(255,184,107,0.36); --blob-3-dim:rgba(255,107,157,0.32);
@@ -127,7 +127,7 @@ body[data-tab="sheet"]{    --blob-1-dim:rgba(20,184,166,var(--blob-opacity)); --
 
 /* ══ ФОНОВЫЕ ПЯТНА (дышат) ═══════════════════════════════ */
 .bg-blobs{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
-.blob{position:absolute;border-radius:50%;filter:blur(70px);will-change:transform,opacity;transition:background 0.8s ease}
+.blob{position:absolute;border-radius:50%;filter:blur(55px);will-change:transform,opacity;transition:background 0.8s ease}
 .blob-1{width:340px;height:340px;left:-60px;top:-40px;background:var(--blob-1-dim);animation:breathe1 13s ease-in-out infinite}
 .blob-2{width:300px;height:300px;right:-50px;top:30%;background:var(--blob-2-dim);animation:breathe2 16s ease-in-out infinite}
 .blob-3{width:280px;height:280px;left:20%;bottom:-80px;background:var(--blob-3-dim);animation:breathe3 11s ease-in-out infinite}
@@ -159,9 +159,11 @@ body[data-tab="sheet"]{    --blob-1-dim:rgba(20,184,166,var(--blob-opacity)); --
 
 /* ══ ЭКРАНЫ ═════════════════════════════════════════════ */
 .screens{flex:1;overflow:hidden;position:relative;z-index:1}
-.scr{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .3s cubic-bezier(0.32,0.72,0,1),opacity .15s ease;background:transparent}
+.scr{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;transform:translateX(100%);transition:transform .22s ease-out,opacity .14s ease-out;background:transparent;will-change:transform}
 .scr.on{transform:translateX(0);opacity:1}
 .scr.back{transform:translateX(-30%);opacity:0;pointer-events:none}
+/* Во время анимации перехода отключаем backdrop-filter — главный виновник торможения */
+body.is-animating .scr,body.is-animating .scr *{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 
 /* ══ ШАПКА ══════════════════════════════════════════════ */
 .hdr{flex-shrink:0;background:var(--glass-bg-strong);backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-saturate));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-saturate));border-bottom:1px solid var(--glass-border);display:flex;align-items:center;padding:0 4px 0 0;min-height:48px;gap:4px}
@@ -267,14 +269,29 @@ body[data-tab="sheet"]{    --blob-1-dim:rgba(20,184,166,var(--blob-opacity)); --
 /* ══ КНОПКИ ДЕЙСТВИЙ ════════════════════════════════════ */
 .actions{display:grid;gap:8px;padding:12px}
 .actions.cols2{grid-template-columns:1fr 1fr}
-.act-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:12px 8px;border:none;border-radius:var(--rad);font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;transition:opacity .15s;line-height:1.2}
-.act-btn:active{opacity:.75}
-.act-btn .act-ico{font-size:22px}
+.act-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:14px 8px;border:none;border-radius:var(--rad);font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;transition:opacity .15s,transform .15s;line-height:1.2}
+.act-btn:active{opacity:.75;transform:scale(.97)}
+.act-btn .act-ico{font-size:24px}
 .ab-acc{background:var(--acc);color:#fff}
 .ab-grn{background:var(--grn-l);color:var(--grn)}
 .ab-red{background:var(--red-l);color:var(--red)}
 .ab-blue{background:var(--blue-l);color:var(--blue)}
-.ab-ghost{background:var(--bg2);color:var(--text)}
+.ab-ghost{background:var(--glass-bg);color:var(--text);border:1px solid var(--glass-border)}
+
+/* ══ HERO-блок деталей заказа ═══════════════════════════ */
+.od-hero{margin:12px;background:var(--glass-bg);backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-saturate));-webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-saturate));border:1px solid var(--glass-border);border-radius:var(--rad);padding:14px 16px;box-shadow:var(--glass-shadow)}
+.od-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
+.od-hero-client{font-size:18px;font-weight:700;color:var(--text);line-height:1.2;flex:1;min-width:0;word-break:break-word}
+.od-status-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:5px 10px 5px 12px;border-radius:14px;border:none;font-family:inherit;cursor:pointer;flex-shrink:0;transition:transform .15s,opacity .15s}
+.od-status-pill:active{transform:scale(.95);opacity:.85}
+.od-status-pill.st-new {background:var(--s-new-l); color:var(--s-new)}
+.od-status-pill.st-conf{background:var(--s-conf-l);color:var(--s-conf)}
+.od-status-pill.st-cook{background:var(--s-cook-l);color:var(--s-cook)}
+.od-status-pill.st-done{background:var(--s-done-l);color:var(--s-done)}
+.od-status-pill.st-canc{background:var(--s-canc-l);color:var(--s-canc)}
+.od-pill-caret{font-size:9px;opacity:.7;margin-left:2px}
+.od-hero-row{font-size:13px;color:var(--text);line-height:1.5;margin-top:4px;word-break:break-word}
+.od-hero-row:first-of-type{margin-top:6px}
 
 /* ══ СТАТУСЫ (выбор) ════════════════════════════════════ */
 .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px}
