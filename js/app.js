@@ -70,6 +70,14 @@ function toggleTheme() {
   try { localStorage.setItem('se_theme', next); } catch(e) {}
 }
 
+// Маркер анимации перехода: на 280мс отключаем backdrop-filter (главный виновник торможения)
+let _animTimer = null;
+function markAnimating() {
+  document.body.classList.add('is-animating');
+  clearTimeout(_animTimer);
+  _animTimer = setTimeout(() => document.body.classList.remove('is-animating'), 280);
+}
+
 // ══════════════════════════════════════════════════════════
 // ЛОКАЛЬНЫЙ КЭШ
 // ══════════════════════════════════════════════════════════
@@ -302,6 +310,7 @@ function switchTab(tab, btn) {
 
   // Маркер текущей вкладки для палитры фоновых пятен (только CSS, без логики)
   document.body.dataset.tab = tab;
+  markAnimating();
 
   window.history.replaceState({ tab: tab, stackLength: 0 }, '');
 
@@ -359,6 +368,7 @@ function pushScreen(id) {
   const cur = document.querySelector('.scr.on');
   if (cur) { cur.classList.remove('on'); cur.classList.add('back'); }
   screenStack.push(cur ? cur.id : tabRoots()[currentTab]);
+  markAnimating();
   
   window.history.pushState({ tab: currentTab, stackLength: screenStack.length }, '');
 
@@ -385,6 +395,7 @@ window.addEventListener('popstate', (event) => {
   const targetStackLength = (state && typeof state.stackLength === 'number') ? state.stackLength : 0;
 
   if (screenStack.length > targetStackLength) {
+    markAnimating();
     while (screenStack.length > targetStackLength) {
       const prev = screenStack.pop();
       const cur = document.querySelector('.scr.on');
@@ -548,7 +559,6 @@ function openMapChoice(encodedAddr) {
   const apps = [
     { name: 'Google Карты',     url: `https://maps.google.com/?q=${q}` },
     { name: 'Яндекс Карты',     url: `https://maps.yandex.ru/?text=${q}` },
-    { name: 'Яндекс Навигатор', url: `https://yandex.ru/maps/?rtext=~${q}&rtt=auto` },
   ];
   const body = document.getElementById('modal-body');
   body.innerHTML = '<div style="padding:0 0 8px;display:flex;flex-direction:column;gap:8px">' +
