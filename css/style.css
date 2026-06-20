@@ -806,17 +806,17 @@ textarea, select {
 } */
 
 /* ══════════════════════════════════════════════════════════
-   #7 Расширение .is-animating на шапку и таб-бар
-   Во время перехода экранов отключаем backdrop-filter на ВСЕХ
-   стеклянных поверхностях (включая .hdr и .tab-bar, которые
-   находятся вне .scr и оставались «размытыми» — микрофризы).
+   #7 Оптимизация анимаций — БЕЗ МЕРЦАНИЯ
+   Раньше отключали backdrop-filter → полупрозрачный стекло-фон
+   начинал просвечивать чёткий фон → мерцание.
+   Теперь: делаем --glass-bg непрозрачным (= --bg-solid) на момент
+   анимации. Блюр становится не нужен (за непрозрачным фоном нечего
+   блюрить), GPU не считает его, а визуально цвет стекла тот же —
+   никакого мерцания.
 ══════════════════════════════════════════════════════════ */
-body.is-animating .scr,
-body.is-animating .scr *,
-body.is-animating .hdr,
-body.is-animating .hdr *,
-body.is-animating .tab-bar,
-body.is-animating .tab-bar * {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+body.is-animating {
+  --glass-bg: var(--bg-solid);
+  --glass-bg-strong: var(--bg-solid);
+  --glass-blur: 0px;
+  --glass-saturate: 1;
 }
