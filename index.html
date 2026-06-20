@@ -32,11 +32,9 @@
   })();
 </script>
 <style>
-  /* Anti-FOUC: фон до загрузки style.css */
-  html{background:#f5f5f7}
-  html[data-theme="dark"]{background:#0f0f12}
-  body{background:#f5f5f7}
-  html[data-theme="dark"] body{background:#0f0f12}
+  /* Anti-FOUC: фон до загрузки style.css. Цвет = --bg2 из CSS, чтобы не было скачка оттенка */
+  html,body{background:#ececf0}
+  html[data-theme="dark"],html[data-theme="dark"] body{background:#1a1a1f}
 </style>
 </head>
 <body data-tab="orders">
