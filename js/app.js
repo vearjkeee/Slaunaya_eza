@@ -330,12 +330,15 @@ function switchTab(tab, btn) {
 
   // Маркер текущей вкладки для палитры фоновых пятен (только CSS, без логики)
   document.body.dataset.tab = tab;
-  markAnimating();
+
+  // #4: табы переключаются мгновенно (без слайда) — как нативные iOS/Android.
+  // tab-switch убирает transition; убираем класс через 50мс, чтобы не сломать pushScreen.
+  document.querySelectorAll('.scr').forEach(s => s.classList.add('tab-switch'));
 
   window.history.replaceState({ tab: tab, stackLength: 0 }, '');
 
   document.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
-  
+
   if (btn) {
     btn.classList.add('on');
   } else {
@@ -347,12 +350,11 @@ function switchTab(tab, btn) {
   }
 
   document.querySelectorAll('.scr').forEach(s => {
-    s.classList.remove('on', 'back'); s.style.transform = 'translateX(100%)';
+    s.classList.remove('on', 'back'); s.style.transform = '';
   });
-  
+
   const el = document.getElementById(tabRoots()[tab]);
   if (el) {
-    el.style.transform = '';
     el.classList.add('on');
   }
 
@@ -363,6 +365,7 @@ function switchTab(tab, btn) {
       initNewOrder();
       updateBackButtonVisibility();
       saveLastScreen();
+      setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50);
       return;
     }
     const draft = loadDraft();
@@ -371,8 +374,8 @@ function switchTab(tab, btn) {
         'Незавершённый заказ',
         `Продолжить оформление заказа${draft.client ? ' для ' + draft.client : ''}?`,
         'Продолжить',
-        () => { applyDraft(draft); updateBackButtonVisibility(); renderCurrentTab(); saveLastScreen(); },
-        () => { clearDraft(); initNewOrder(); updateBackButtonVisibility(); saveLastScreen(); }
+        () => { applyDraft(draft); updateBackButtonVisibility(); renderCurrentTab(); saveLastScreen(); setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50); },
+        () => { clearDraft(); initNewOrder(); updateBackButtonVisibility(); saveLastScreen(); setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50); }
       );
       return;
     }
@@ -382,14 +385,17 @@ function switchTab(tab, btn) {
   updateBackButtonVisibility();
   renderCurrentTab();
   saveLastScreen();
+  setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50);
 }
 
 function pushScreen(id) {
+  // #2: двойной requestAnimationFrame — гарантирует, что is-animating
+  // применён и отрисован ДО начала transform transition (без мерцания)
+  markAnimating();
   const cur = document.querySelector('.scr.on');
   if (cur) { cur.classList.remove('on'); cur.classList.add('back'); }
   screenStack.push(cur ? cur.id : tabRoots()[currentTab]);
-  markAnimating();
-  
+
   window.history.pushState({ tab: currentTab, stackLength: screenStack.length }, '');
 
   const next = document.getElementById(id);
