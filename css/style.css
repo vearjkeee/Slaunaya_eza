@@ -820,3 +820,42 @@ body.is-animating {
   --glass-blur: 0px;
   --glass-saturate: 1;
 }
+/* #5: блобы тоже без transition на момент анимации — убирает reflow */
+body.is-animating .blob{transition:none!important}
+
+/* ══════════════════════════════════════════════════════════
+   #3 Убрать backdrop-filter с прокручиваемого контента
+   На карточках/секциях внутри .scroll блюр бесполезен (за ними
+   нет ничего для блюра) и дорог при анимации transform экрана —
+   именно он вызывал мерцание при «Заказы ↔ Новый».
+   Оставляем стекло только на фиксированных: шапка, таб-бар, модалки.
+══════════════════════════════════════════════════════════ */
+.scr .scroll .order-card,
+.scr .scroll .sec,
+.scr .scroll .d-row,
+.scr .scroll .sh-item,
+.scr .scroll .menu-edit-row,
+.scr .scroll .ci,
+.scr .scroll .db-card,
+.scr .scroll .sheet-card,
+.scr .scroll .od-hero{
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+}
+/* Sticky-заголовки внутри scroll — сплошной фон */
+.scr .scroll .date-group-hdr,
+.scr .scroll .cal-spoiler-hdr,
+.scr .scroll .sh-cat-hdr{
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  background:var(--bg-solid);
+}
+
+/* ══════════════════════════════════════════════════════════
+   #4 Мгновенное переключение табов (без слайда)
+   Нативные табы iOS/Android переключаются мгновенно.
+   Слайд остаётся только для pushScreen (детали заказа, шаги).
+══════════════════════════════════════════════════════════ */
+.scr.tab-switch{transition:none!important}
+.scr.tab-switch.on{transform:none!important;opacity:1!important}
+.scr.tab-switch.back{transform:none!important;opacity:0!important}
