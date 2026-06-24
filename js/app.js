@@ -79,26 +79,6 @@ function markAnimating() {
 }
 
 // ══════════════════════════════════════════════════════════
-// СПОСОБ СВЯЗИ — чипы с SVG-иконками
-// setContact — по клику на чип; setContactValue — программно
-// ══════════════════════════════════════════════════════════
-function setContact(value, btn) {
-  setContactValue(value);
-  saveDraft();
-}
-
-function setContactValue(val) {
-  const v = val || '';
-  const inp = document.getElementById('o-contact');
-  if (inp) inp.value = v;
-  document.querySelectorAll('#o-contact-chips .contact-chip').forEach(c => {
-    c.classList.toggle('on', c.dataset.value === v);
-  });
-  const hint = document.getElementById('o-contact-hint');
-  if (hint) hint.textContent = v ? '· ' + v : '';
-}
-
-// ══════════════════════════════════════════════════════════
 // ЛОКАЛЬНЫЙ КЭШ
 // ══════════════════════════════════════════════════════════
 function loadLocalCache() {
@@ -267,7 +247,7 @@ function applyDraft(d) {
   if (!d) return;
   draftDiscount = +d.discount || 0;
   document.getElementById('o-client').value  = d.client  || '';
-  setContactValue(d.contact);
+  document.getElementById('o-contact').value = d.contact || '';
   document.getElementById('o-date').value    = d.date    || '';
   document.getElementById('o-time').value    = d.time    || '';
   document.getElementById('o-addr').value    = d.addr    || '';
@@ -330,15 +310,12 @@ function switchTab(tab, btn) {
 
   // Маркер текущей вкладки для палитры фоновых пятен (только CSS, без логики)
   document.body.dataset.tab = tab;
-
-  // #4: табы переключаются мгновенно (без слайда) — как нативные iOS/Android.
-  // tab-switch убирает transition; убираем класс через 50мс, чтобы не сломать pushScreen.
-  document.querySelectorAll('.scr').forEach(s => s.classList.add('tab-switch'));
+  markAnimating();
 
   window.history.replaceState({ tab: tab, stackLength: 0 }, '');
 
   document.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
-
+  
   if (btn) {
     btn.classList.add('on');
   } else {
@@ -350,11 +327,12 @@ function switchTab(tab, btn) {
   }
 
   document.querySelectorAll('.scr').forEach(s => {
-    s.classList.remove('on', 'back'); s.style.transform = '';
+    s.classList.remove('on', 'back'); s.style.transform = 'translateX(100%)';
   });
-
+  
   const el = document.getElementById(tabRoots()[tab]);
   if (el) {
+    el.style.transform = '';
     el.classList.add('on');
   }
 
@@ -365,7 +343,6 @@ function switchTab(tab, btn) {
       initNewOrder();
       updateBackButtonVisibility();
       saveLastScreen();
-      setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50);
       return;
     }
     const draft = loadDraft();
@@ -374,8 +351,8 @@ function switchTab(tab, btn) {
         'Незавершённый заказ',
         `Продолжить оформление заказа${draft.client ? ' для ' + draft.client : ''}?`,
         'Продолжить',
-        () => { applyDraft(draft); updateBackButtonVisibility(); renderCurrentTab(); saveLastScreen(); setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50); },
-        () => { clearDraft(); initNewOrder(); updateBackButtonVisibility(); saveLastScreen(); setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50); }
+        () => { applyDraft(draft); updateBackButtonVisibility(); renderCurrentTab(); saveLastScreen(); },
+        () => { clearDraft(); initNewOrder(); updateBackButtonVisibility(); saveLastScreen(); }
       );
       return;
     }
@@ -385,17 +362,14 @@ function switchTab(tab, btn) {
   updateBackButtonVisibility();
   renderCurrentTab();
   saveLastScreen();
-  setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50);
 }
 
 function pushScreen(id) {
-  // #2: двойной requestAnimationFrame — гарантирует, что is-animating
-  // применён и отрисован ДО начала transform transition (без мерцания)
-  markAnimating();
   const cur = document.querySelector('.scr.on');
   if (cur) { cur.classList.remove('on'); cur.classList.add('back'); }
   screenStack.push(cur ? cur.id : tabRoots()[currentTab]);
-
+  markAnimating();
+  
   window.history.pushState({ tab: currentTab, stackLength: screenStack.length }, '');
 
   const next = document.getElementById(id);
@@ -627,7 +601,7 @@ function duplicateOrder(row) {
   });
 
   document.getElementById('o-client').value  = order.client || '';
-  setContactValue(order.contact);
+  document.getElementById('o-contact').value = order.contact || '';
   document.getElementById('o-date').value    = '';
   document.getElementById('o-time').value    = order.event_time || '';
   setDeliv(order.delivery_type || 'Самовывоз', null, true);
@@ -661,7 +635,7 @@ function openEditOrder() {
   updateEditSaveBar();
 
   document.getElementById('o-client').value  = order.client || '';
-  setContactValue(order.contact);
+  document.getElementById('o-contact').value = order.contact || '';
   document.getElementById('o-date').value    = dateToISO(order.event_date || '');
   document.getElementById('o-time').value    = order.event_time || '';
   setDeliv(order.delivery_type || 'Самовывоз', null, true);
@@ -708,11 +682,10 @@ function initNewOrder() {
   updateEditSaveBar();
   cart = {};
   cartOrder = [];
-  ['o-client','o-date','o-time','o-addr','o-dcost'].forEach(id => {
+  ['o-client','o-contact','o-date','o-time','o-addr','o-dcost'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
-  setContactValue('');
   const aiTxt = document.getElementById('ai-txt');
   if (aiTxt) aiTxt.value = '';
   
@@ -767,7 +740,7 @@ function onClientInput() {
 function pickClient(i) {
   const c = document.getElementById('c-drop')._hits[i];
   document.getElementById('o-client').value  = c.name;
-  setContactValue(c.contact);
+  document.getElementById('o-contact').value = c.contact || '';
   setDeliv(c.type || 'Самовывоз', null, true);
   if (c.address) document.getElementById('o-addr').value = c.address;
   document.getElementById('c-drop').classList.remove('on');
@@ -832,7 +805,7 @@ async function runAI() {
 function applyAIResultToForm(res) {
   if (!res) return;
   if (res.client)        document.getElementById('o-client').value  = res.client;
-  if (res.contact) setContactValue(res.contact);
+  if (res.contact)       document.getElementById('o-contact').value = res.contact;
   if (res.event_date)    document.getElementById('o-date').value    = dateToISO(res.event_date);
   if (res.event_time)    document.getElementById('o-time').value    = res.event_time;
   if (res.delivery_type) {
@@ -1625,8 +1598,8 @@ function renderDashboard(d) {
       <div class="db-card-value">${fmt(d.tax)} <span class="db-byn">BYN</span></div>
       <div class="db-card-sub">от выручки ${fmt(d.revenue_total)}</div>
     </div>
-    <div class="db-card db-card-exp">
-      <div class="db-card-label">Расходы</div>
+    <div class="db-card db-card-exp db-card-clickable" onclick="openExpensesModal()">
+      <div class="db-card-label">Расходы · нажмите для деталей</div>
       <div class="db-card-value">${fmt(d.expenses_total)} <span class="db-byn">BYN</span></div>
       <div class="db-card-sub">закупки ${fmt(d.expenses_shopping)}${d.expenses_other > 0 ? ' + прочее ' + fmt(d.expenses_other) : ''}</div>
     </div>
@@ -1671,24 +1644,6 @@ function renderDashboard(d) {
     </div>
   </div>`;
 
-  if (d.recent_expenses && d.recent_expenses.length) {
-    html += `<div class="sec"><div class="sec-hdr">Последние записи</div><div class="sec-body" style="padding:0">`;
-    d.recent_expenses.forEach(r => {
-      const isIncome = r.type === "Доход вне бота";
-      html += `<div class="row-item">
-        <div class="ri-ico">${isIncome ? '💰' : '💸'}</div>
-        <div class="ri-body">
-          <div class="ri-label">${esc(r.type)}</div>
-          <div class="ri-sub">${esc(r.date)}${r.note ? ' · ' + esc(r.note) : ''}</div>
-        </div>
-        <div class="ri-right" style="color:${isIncome ? 'var(--grn)' : 'var(--red)'}">
-          ${isIncome ? '+' : '−'}${(+r.sum || 0).toFixed(2)}
-        </div>
-      </div>`;
-    });
-    html += `</div></div>`;
-  }
-
   html += `<div style="height:16px"></div>`;
   document.getElementById('dashboard-body').innerHTML = html;
 }
@@ -1703,6 +1658,19 @@ function openRevenueModal() {
   const title = 'Выручка · ' + MONTH_NAMES[d.month] + ' ' + d.year;
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').innerHTML = renderRevenueModal(d);
+  document.getElementById('modal').classList.add('on');
+}
+
+// ══════════════════════════════════════════════════════════
+// P5: МОДАЛКА РАСХОДОВ — все записи месяца + сводка по категориям
+// ══════════════════════════════════════════════════════════
+function openExpensesModal() {
+  const d = lastDashData;
+  if (!d) { showToast('Данные ещё загружаются'); return; }
+
+  const title = 'Расходы · ' + MONTH_NAMES[d.month] + ' ' + d.year;
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = renderExpensesModal(d);
   document.getElementById('modal').classList.add('on');
 }
 
