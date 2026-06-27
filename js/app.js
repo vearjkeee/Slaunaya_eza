@@ -1644,6 +1644,7 @@ function renderDashboard(d) {
     </div>
   </div>`;
 
+  // P5: блок «Последние записи» убран — заменён на модалку расходов (openExpensesModal)
   html += `<div style="height:16px"></div>`;
   document.getElementById('dashboard-body').innerHTML = html;
 }
@@ -1662,7 +1663,7 @@ function openRevenueModal() {
 }
 
 // ══════════════════════════════════════════════════════════
-// P5: МОДАЛКА РАСХОДОВ — все записи месяца + сводка по категориям
+// P5: МОДАЛКА РАСХОДОВ — только расходы (доходы вне бота — в модалке выручки)
 // ══════════════════════════════════════════════════════════
 function openExpensesModal() {
   const d = lastDashData;
