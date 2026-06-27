@@ -725,23 +725,45 @@ function renderRevenueModal(d) {
     html += `</div>`;
   }
 
+  // P5: Список доходов вне бота (из month_expenses фильтруем type === 'Доход вне бота')
+  const incomeRows = (d.month_expenses || []).filter(r => r.type === 'Доход вне бота');
+  if (incomeRows.length) {
+    const sortedIncome = incomeRows.slice().sort((a, b) => {
+      const da = String(a.date || '').split('.').reverse().join('');
+      const db = String(b.date || '').split('.').reverse().join('');
+      return db.localeCompare(da);
+    });
+    html += `<div class="rev-orders-hdr" style="margin-top:12px">Доход вне бота (${sortedIncome.length})</div>`;
+    html += `<div class="rev-orders">`;
+    sortedIncome.forEach(r => {
+      const noteTxt = (r.note || '').trim();
+      html += `<div class="rev-order">
+        <div class="rev-o-top">
+          <div class="rev-o-client">${esc(r.type)}</div>
+          <div class="rev-o-total" style="color:var(--grn)">+${fmt(r.sum)} BYN</div>
+        </div>
+        <div class="rev-o-date">📅 ${esc(r.date || '—')}</div>
+        ${noteTxt ? `<div class="rev-o-note">💬 ${esc(noteTxt)}</div>` : ''}
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
   return html;
 }
 
 // ══════════════════════════════════════════════════════════
-// P5: МОДАЛКА РАСХОДОВ — сводка по категориям (note) + список всех записей
+// P5: МОДАЛКА РАСХОДОВ — ТОЛЬКО расходы (доходы вне бота — в модалке выручки)
 // Ожидает d.month_expenses: [{date, type, sum, note}, ...]
-// Группировка по note (столбец D). Доходы вне бота показываем отдельно.
+// Группировка по note (столбец D). Пустой note → «Без категории».
 // ══════════════════════════════════════════════════════════
 function renderExpensesModal(d) {
   const fmt = v => (+v || 0).toFixed(2).replace('.', ',');
   let html = '';
 
-  const rows = d.month_expenses || [];
-
-  // Разделение: доходы vs расходы
-  const incomeRows = rows.filter(r => r.type === 'Доход вне бота');
-  const expRows    = rows.filter(r => r.type !== 'Доход вне бота');
+  // ТОЛЬКО расходы — доходы вне бота исключаем (они в модалке выручки)
+  const allRows = d.month_expenses || [];
+  const expRows = allRows.filter(r => r.type !== 'Доход вне бота');
 
   // Группировка расходов по note (столбец D). Пустой note → «Без категории».
   const byCat = {};
@@ -755,29 +777,25 @@ function renderExpensesModal(d) {
   // Сортировка категорий по убыванию суммы
   const cats = Object.keys(byCat).sort((a, b) => byCat[b].sum - byCat[a].sum);
   const totalExpenses = expRows.reduce((s, r) => s + (+r.sum || 0), 0);
-  const totalIncome   = incomeRows.reduce((s, r) => s + (+r.sum || 0), 0);
 
   // ── Сводка по категориям ──
   html += `<div class="rev-summary">`;
-  if (!cats.length && !incomeRows.length) {
+  if (!expRows.length) {
     html += `<div class="rev-sum-row"><span>Записей нет</span><span>—</span></div>`;
   } else {
     cats.forEach(cat => {
       html += `<div class="rev-sum-row"><span>${esc(cat)} <span style="color:var(--hint);font-weight:400">· ${byCat[cat].count} зап.</span></span><span>−${fmt(byCat[cat].sum)} BYN</span></div>`;
     });
-    if (totalIncome > 0) {
-      html += `<div class="rev-sum-row"><span>Доход вне бота</span><span style="color:var(--grn)">+${fmt(totalIncome)} BYN</span></div>`;
-    }
     html += `<div class="rev-sum-total"><span>Итого расходов</span><span>−${fmt(totalExpenses)} BYN</span></div>`;
   }
   html += `</div>`;
 
-  // ── Список всех записей месяца ──
-  if (!rows.length) {
-    html += `<div class="rev-empty">В этом месяце нет записей</div>`;
+  // ── Список всех записей расходов месяца ──
+  if (!expRows.length) {
+    html += `<div class="rev-empty">В этом месяце нет расходов</div>`;
   } else {
     // Сортировка: от новых к старым (по дате)
-    const sorted = rows.slice().sort((a, b) => {
+    const sorted = expRows.slice().sort((a, b) => {
       const da = String(a.date || '').split('.').reverse().join('');
       const db = String(b.date || '').split('.').reverse().join('');
       return db.localeCompare(da);
@@ -785,14 +803,11 @@ function renderExpensesModal(d) {
     html += `<div class="rev-orders-hdr">Записи месяца (${sorted.length})</div>`;
     html += `<div class="rev-orders">`;
     sorted.forEach(r => {
-      const isIncome = r.type === 'Доход вне бота';
-      const sign = isIncome ? '+' : '−';
-      const color = isIncome ? 'var(--grn)' : 'var(--red)';
       const noteTxt = (r.note || '').trim();
       html += `<div class="rev-order">
         <div class="rev-o-top">
           <div class="rev-o-client">${esc(r.type || '—')}</div>
-          <div class="rev-o-total" style="color:${color}">${sign}${fmt(r.sum)} BYN</div>
+          <div class="rev-o-total" style="color:var(--red)">−${fmt(r.sum)} BYN</div>
         </div>
         <div class="rev-o-date">📅 ${esc(r.date || '—')}</div>
         ${noteTxt ? `<div class="rev-o-note">💬 ${esc(noteTxt)}</div>` : ''}
