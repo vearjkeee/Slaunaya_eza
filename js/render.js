@@ -254,8 +254,18 @@ function renderActiveGrouped(el, list) {
     groups[g].push(o);
   });
 
+  // P5: сортировка по дате доставки от ближайшей к поздней.
+  // При равной дате — по времени доставки (HH:mm сравнивается лексикографически).
+  // Если времени нет — заказ считается позже тех, у кого время есть (в конец группы).
   Object.values(groups).forEach(arr =>
-    arr.sort((a, b) => parseDateNum(b.date_order) - parseDateNum(a.date_order))
+    arr.sort((a, b) => {
+      const da = parseDateNum(a.event_date);
+      const db = parseDateNum(b.event_date);
+      if (da !== db) return da - db;
+      const ta = String(a.event_time || '').trim() || '99:99';
+      const tb = String(b.event_time || '').trim() || '99:99';
+      return ta.localeCompare(tb);
+    })
   );
 
   let html = '';
