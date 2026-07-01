@@ -79,6 +79,26 @@ function markAnimating() {
 }
 
 // ══════════════════════════════════════════════════════════
+// СПОСОБ СВЯЗИ — чипы с SVG-иконками
+// setContact — по клику на чип; setContactValue — программно
+// ══════════════════════════════════════════════════════════
+function setContact(value, btn) {
+  setContactValue(value);
+  saveDraft();
+}
+
+function setContactValue(val) {
+  const v = val || '';
+  const inp = document.getElementById('o-contact');
+  if (inp) inp.value = v;
+  document.querySelectorAll('#o-contact-chips .contact-chip').forEach(c => {
+    c.classList.toggle('on', c.dataset.value === v);
+  });
+  const hint = document.getElementById('o-contact-hint');
+  if (hint) hint.textContent = v ? '· ' + v : '';
+}
+
+// ══════════════════════════════════════════════════════════
 // ЛОКАЛЬНЫЙ КЭШ
 // ══════════════════════════════════════════════════════════
 function loadLocalCache() {
@@ -247,7 +267,7 @@ function applyDraft(d) {
   if (!d) return;
   draftDiscount = +d.discount || 0;
   document.getElementById('o-client').value  = d.client  || '';
-  document.getElementById('o-contact').value = d.contact || '';
+  setContactValue(d.contact);
   document.getElementById('o-date').value    = d.date    || '';
   document.getElementById('o-time').value    = d.time    || '';
   document.getElementById('o-addr').value    = d.addr    || '';
@@ -310,12 +330,15 @@ function switchTab(tab, btn) {
 
   // Маркер текущей вкладки для палитры фоновых пятен (только CSS, без логики)
   document.body.dataset.tab = tab;
-  markAnimating();
+
+  // #4: табы переключаются мгновенно (без слайда) — как нативные iOS/Android.
+  // tab-switch убирает transition; убираем класс через 50мс, чтобы не сломать pushScreen.
+  document.querySelectorAll('.scr').forEach(s => s.classList.add('tab-switch'));
 
   window.history.replaceState({ tab: tab, stackLength: 0 }, '');
 
   document.querySelectorAll('.tb').forEach(b => b.classList.remove('on'));
-  
+
   if (btn) {
     btn.classList.add('on');
   } else {
@@ -327,12 +350,11 @@ function switchTab(tab, btn) {
   }
 
   document.querySelectorAll('.scr').forEach(s => {
-    s.classList.remove('on', 'back'); s.style.transform = 'translateX(100%)';
+    s.classList.remove('on', 'back'); s.style.transform = '';
   });
-  
+
   const el = document.getElementById(tabRoots()[tab]);
   if (el) {
-    el.style.transform = '';
     el.classList.add('on');
   }
 
@@ -343,6 +365,7 @@ function switchTab(tab, btn) {
       initNewOrder();
       updateBackButtonVisibility();
       saveLastScreen();
+      setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50);
       return;
     }
     const draft = loadDraft();
@@ -351,8 +374,8 @@ function switchTab(tab, btn) {
         'Незавершённый заказ',
         `Продолжить оформление заказа${draft.client ? ' для ' + draft.client : ''}?`,
         'Продолжить',
-        () => { applyDraft(draft); updateBackButtonVisibility(); renderCurrentTab(); saveLastScreen(); },
-        () => { clearDraft(); initNewOrder(); updateBackButtonVisibility(); saveLastScreen(); }
+        () => { applyDraft(draft); updateBackButtonVisibility(); renderCurrentTab(); saveLastScreen(); setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50); },
+        () => { clearDraft(); initNewOrder(); updateBackButtonVisibility(); saveLastScreen(); setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50); }
       );
       return;
     }
@@ -362,6 +385,7 @@ function switchTab(tab, btn) {
   updateBackButtonVisibility();
   renderCurrentTab();
   saveLastScreen();
+  setTimeout(() => document.querySelectorAll('.scr').forEach(s => s.classList.remove('tab-switch')), 50);
 }
 
 function pushScreen(id) {
@@ -601,7 +625,7 @@ function duplicateOrder(row) {
   });
 
   document.getElementById('o-client').value  = order.client || '';
-  document.getElementById('o-contact').value = order.contact || '';
+  setContactValue(order.contact);
   document.getElementById('o-date').value    = '';
   document.getElementById('o-time').value    = order.event_time || '';
   setDeliv(order.delivery_type || 'Самовывоз', null, true);
@@ -635,7 +659,7 @@ function openEditOrder() {
   updateEditSaveBar();
 
   document.getElementById('o-client').value  = order.client || '';
-  document.getElementById('o-contact').value = order.contact || '';
+  setContactValue(order.contact);
   document.getElementById('o-date').value    = dateToISO(order.event_date || '');
   document.getElementById('o-time').value    = order.event_time || '';
   setDeliv(order.delivery_type || 'Самовывоз', null, true);
@@ -682,10 +706,11 @@ function initNewOrder() {
   updateEditSaveBar();
   cart = {};
   cartOrder = [];
-  ['o-client','o-contact','o-date','o-time','o-addr','o-dcost'].forEach(id => {
+  ['o-client','o-date','o-time','o-addr','o-dcost'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  setContactValue('');
   const aiTxt = document.getElementById('ai-txt');
   if (aiTxt) aiTxt.value = '';
   
@@ -740,7 +765,7 @@ function onClientInput() {
 function pickClient(i) {
   const c = document.getElementById('c-drop')._hits[i];
   document.getElementById('o-client').value  = c.name;
-  document.getElementById('o-contact').value = c.contact || '';
+  setContactValue(c.contact);
   setDeliv(c.type || 'Самовывоз', null, true);
   if (c.address) document.getElementById('o-addr').value = c.address;
   document.getElementById('c-drop').classList.remove('on');
@@ -805,7 +830,7 @@ async function runAI() {
 function applyAIResultToForm(res) {
   if (!res) return;
   if (res.client)        document.getElementById('o-client').value  = res.client;
-  if (res.contact)       document.getElementById('o-contact').value = res.contact;
+  if (res.contact) setContactValue(res.contact);
   if (res.event_date)    document.getElementById('o-date').value    = dateToISO(res.event_date);
   if (res.event_time)    document.getElementById('o-time').value    = res.event_time;
   if (res.delivery_type) {
