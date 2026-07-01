@@ -1,25 +1,31 @@
 {
   "name": "Slaŭnaya Eža",
-  "short_name": "Slaŭnaya Eža",
-  "description": "Кейтеринг — управление заказами",
-  "start_url": "/Slaunaya_eza/index.html",
-  "scope": "/Slaunaya_eza/",
+  "short_name": "Slaŭnaya",
+  "description": "PWA для кейтеринга Slaŭnaya Eža",
+  "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
+  "background_color": "#f5f5f7",
   "theme_color": "#D85A30",
-  "background_color": "#ffffff",
+  "lang": "ru",
   "icons": [
     {
-      "src": "icons/logo.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icons/logo.png",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
