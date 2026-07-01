@@ -812,3 +812,20 @@ body.is-animating .tab-bar * {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* ══ СПОСОБ СВЯЗИ — чипы с SVG-иконками ════════════════ */
+.contact-chips{display:flex;gap:4px;width:100%}
+.contact-chip{flex:1;min-width:0;height:42px;border:1px solid var(--glass-border);border-radius:var(--rad-s);background:var(--glass-bg-strong);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:border-color .2s,color .2s,background .2s,transform .15s;color:var(--text);font-family:inherit}
+.contact-chip svg{width:20px;height:20px;display:block}
+.contact-chip:active{transform:scale(.94)}
+.contact-chip.on{border-color:var(--acc);color:var(--acc);background:var(--acc-l)}
+.contact-hint{font-size:11px;font-weight:600;color:var(--acc-d);text-transform:none;letter-spacing:0;margin-left:6px}
+
+/* ══════════════════════════════════════════════════════════
+   #4 Мгновенное переключение табов (без слайда)
+   Нативные табы iOS/Android переключаются мгновенно.
+   Слайд остаётся только для pushScreen (детали заказа, шаги).
+══════════════════════════════════════════════════════════ */
+.scr.tab-switch{transition:none!important}
+.scr.tab-switch.on{transform:none!important;opacity:1!important}
+.scr.tab-switch.back{transform:none!important;opacity:0!important}
