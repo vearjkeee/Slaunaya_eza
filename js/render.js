@@ -39,8 +39,10 @@ function fmtQty(q) {
 
 function statusClass(st) {
   return ({
-    "🆕 Новый":"st-new","✅ Подтверждён":"st-conf",
-    "🍳 Готовится":"st-cook","✔️ Выполнен":"st-done","❌ Отменён":"st-canc"
+    "🆕 Новый":"st-new",
+    "💰 Предоплачен":"st-prepaid",
+    "✔️ Выполнен":"st-done",
+    "❌ Отменён":"st-canc"
   })[st] || "st-new";
 }
 
