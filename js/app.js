@@ -302,6 +302,18 @@ async function loadCache(force = false) {
   document.getElementById('cache-time2').textContent = label;
 
   updateAllBadges();
+
+  // #4: если открыт экран деталей заказа — перерисовать его с свежими данными
+  // (чтобы prepayment_amount от GAS отобразился после внесения предоплаты)
+  const detailScreen = document.getElementById('s-order-detail');
+  if (detailScreen && detailScreen.classList.contains('on') && currentOrderRow) {
+    const order = findOrder(currentOrderRow);
+    if (order) {
+      const isActive = ACTIVE_ORDERS.some(o => o.row == currentOrderRow);
+      renderOrderDetail(order, isActive);
+    }
+  }
+
   return true;
 }
 
@@ -569,22 +581,73 @@ function changeStatus(row, status) {
 // ══════════════════════════════════════════════════════════
 // ПРЕДОПЛАТА И РАСХОДЫ ПО ЗАКАЗУ
 // ══════════════════════════════════════════════════════════
+
+// Универсальная модалка с формой (вместо prompt). fields: [{id, label, value, type, placeholder}]
+function showFormModal(title, fields, okLabel, onOk) {
+  let formHtml = '<div style="padding:4px 16px 4px">';
+  fields.forEach(f => {
+    formHtml += `<div class="f-group" style="padding:8px 0">
+      <div class="f-label">${f.label}</div>
+      <input class="f-input" id="ff-${f.id}" type="${f.type||'text'}" value="${f.value||''}" placeholder="${f.placeholder||''}" ${f.step?`step="${f.step}"`:''} ${f.min!==undefined?`min="${f.min}"`:''}/>
+    </div>`;
+  });
+  formHtml += '</div>';
+  formHtml += `<div style="display:flex;gap:8px;padding:8px 16px 16px">
+    <button class="cd-btn cd-cancel" onclick="closeFormModal()">Отмена</button>
+    <button class="cd-btn cd-ok" id="ff-ok">${okLabel||'ОК'}</button>
+  </div>`;
+
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = formHtml;
+  document.getElementById('modal').classList.add('on');
+
+  const okBtn = document.getElementById('ff-ok');
+  okBtn.onclick = () => {
+    const values = {};
+    fields.forEach(f => { values[f.id] = document.getElementById('ff-' + f.id).value; });
+    closeModal();
+    if (onOk) onOk(values);
+  };
+  // Фокус на первое поле
+  setTimeout(() => { const first = document.getElementById('ff-' + fields[0].id); if (first) first.focus(); }, 100);
+}
+
+function closeFormModal() { closeModal(); }
+
 function addPrepayment(row) {
   const order = findOrder(row);
   if (!order) return;
   const total = +order.total || 0;
-  const amount = prompt(`Введите сумму предоплаты (итого ${total.toFixed(2)} BYN):`, total ? (total / 2).toFixed(2) : '');
-  if (amount === null) return;
-  const sum = parseFloat(String(amount).replace(',', '.')) || 0;
-  if (sum <= 0) { showToast('Введите сумму больше 0'); return; }
-  showConfirm('Внести предоплату', `Сумма: ${sum.toFixed(2)} BYN\nЗаказ перейдёт в статус «💰 Предоплачен»`, 'Внести', async () => {
-    const o = findOrder(row);
-    if (o) { o.prepayment_amount = sum; o.status = ST.PREPAID; }
-    const updated = findOrder(row);
-    if (updated) renderOrderDetail(updated, ACTIVE_ORDERS.some(o => o.row == row));
-    renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
-    await sendActionToGAS({ action: 'add_prepayment', order_row: row, amount: sum });
-  });
+  const currentPrep = +order.prepayment_amount || 0;
+  const hint = currentPrep > 0
+    ? `Уже внесено: ${currentPrep.toFixed(2)} BYN. Введите сумму ДОПЛАТЫ (прибавится к существующей)`
+    : (total ? `Итого по заказу: ${total.toFixed(2)} BYN` : '');
+  showFormModal(
+    'Внести предоплату',
+    [
+      { id: 'amount', label: `Сумма доплаты (BYN)${hint ? ' · ' + hint : ''}`, type: 'number', value: '', placeholder: '0.00', step: '0.01', min: '0' }
+    ],
+    'Внести',
+    (vals) => {
+      const addSum = parseFloat(String(vals.amount).replace(',', '.')) || 0;
+      if (addSum <= 0) { showToast('Введите сумму больше 0'); return; }
+      const newSum = currentPrep + addSum;
+      const confirmMsg = currentPrep > 0
+        ? `Доплата: ${addSum.toFixed(2)} BYN\nВсего предоплата: ${newSum.toFixed(2)} BYN${total ? ' (из ' + total.toFixed(2) + ')' : ''}\nЗаказ перейдёт в статус «💰 Предоплачен»`
+        : `Сумма: ${newSum.toFixed(2)} BYN\nЗаказ перейдёт в статус «💰 Предоплачен»`;
+      showConfirm('Внести предоплату', confirmMsg, 'Внести', async () => {
+        const o = findOrder(row);
+        if (o) { o.prepayment_amount = newSum; o.status = ST.PREPAID; }
+        const updated = findOrder(row);
+        if (updated) renderOrderDetail(updated, ACTIVE_ORDERS.some(o => o.row == row));
+        renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
+        // Отправляем ИТОГОВУЮ сумму (старая + доплата) — GAS просто записывает её в столбец S
+        await sendActionToGAS({ action: 'add_prepayment', order_row: row, amount: newSum });
+        // #4: перезагружаем данные чтобы получить prepayment_amount от GAS
+        setTimeout(() => loadCache(false), 1000);
+      });
+    }
+  );
 }
 
 function markPaidFull(row) {
@@ -598,23 +661,32 @@ function markPaidFull(row) {
     if (updated) renderOrderDetail(updated, ACTIVE_ORDERS.some(o => o.row == row));
     renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
     await sendActionToGAS({ action: 'mark_paid_full', order_row: row });
+    // #4: перезагружаем данные
+    setTimeout(() => loadCache(false), 1000);
   });
 }
 
 function addOrderExpense(row) {
   const order = findOrder(row);
   if (!order) return;
-  const amount = prompt('Введите сумму расхода (BYN):', '');
-  if (amount === null) return;
-  const sum = parseFloat(String(amount).replace(',', '.')) || 0;
-  if (sum <= 0) { showToast('Введите сумму больше 0'); return; }
-  const note = prompt('Примечание (упаковка, доставка курьером…):', '') || '';
-  showConfirm('Внести расход', `Расход по заказу: ${sum.toFixed(2)} BYN${note ? '\n' + note : ''}`, 'Внести', async () => {
-    await sendActionToGAS({ action: 'add_order_expense', order_row: row, amount: sum, note });
-    showToast('✓ Расход по заказу записан');
-    // Обновляем детали, чтобы показать расход
-    setTimeout(() => loadCache(true), 800);
-  });
+  showFormModal(
+    'Внести расход по заказу',
+    [
+      { id: 'amount', label: 'Сумма расхода (BYN)', type: 'number', value: '', placeholder: '0.00', step: '0.01', min: '0' },
+      { id: 'note',   label: 'Примечание',           type: 'text',   value: '', placeholder: 'Упаковка, доставка курьером…' }
+    ],
+    'Внести',
+    (vals) => {
+      const sum = parseFloat(String(vals.amount).replace(',', '.')) || 0;
+      if (sum <= 0) { showToast('Введите сумму больше 0'); return; }
+      const note = (vals.note || '').trim();
+      showConfirm('Внести расход', `Расход по заказу: ${sum.toFixed(2)} BYN${note ? '\n' + note : ''}`, 'Внести', async () => {
+        await sendActionToGAS({ action: 'add_order_expense', order_row: row, amount: sum, note });
+        showToast('✓ Расход по заказу записан');
+        setTimeout(() => loadCache(true), 800);
+      });
+    }
+  );
 }
 
 // ══════════════════════════════════════════════════════════
