@@ -829,3 +829,23 @@ body.is-animating .tab-bar * {
 .scr.tab-switch{transition:none!important}
 .scr.tab-switch.on{transform:none!important;opacity:1!important}
 .scr.tab-switch.back{transform:none!important;opacity:0!important}
+
+/* ══ #2: КНОПКИ ДЕНЕГ И РАСХОДА В ДЕТАЛЯХ ЗАКАЗА ════════ */
+.od-money-row{display:flex;gap:8px;margin:0 12px 8px}
+.od-money-btn{flex:1;height:46px;border:none;border-radius:var(--rad);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:opacity .15s,transform .15s;color:#fff}
+.od-money-btn:active{transform:scale(.97);opacity:.88}
+.od-money-prep{background:var(--grn);box-shadow:0 3px 12px rgba(42,125,63,0.28)}
+.od-money-full{background:var(--acc);box-shadow:0 3px 12px rgba(216,90,48,0.28)}
+.od-money-ico{font-size:16px}
+.od-expense-row{margin:0 12px 8px}
+.od-expense-btn{width:100%;height:42px;border:1px solid var(--glass-border);border-radius:var(--rad);background:var(--glass-bg-strong);color:var(--red);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:opacity .15s,transform .15s}
+.od-expense-btn:active{transform:scale(.98);opacity:.85}
+
+/* Строки предоплаты в hero */
+.od-prep-line{color:var(--grn);font-weight:600;font-size:14px!important;margin-top:6px}
+.od-prep-paid{color:var(--grn);font-weight:700;font-size:14px!important;margin-top:6px}
+
+/* Статус Предоплачен — зелёный */
+.st-prepaid{background:var(--grn-l);color:var(--grn)}
+.od-status-pill.st-prepaid{background:var(--grn-l);color:var(--grn)}
+.st-btn.st-prepaid{background:var(--grn-l);color:var(--grn)}
