@@ -175,9 +175,10 @@ function renderCalendar() {
 
   label.textContent = CAL_MONTH_NAMES[calMonth] + ' ' + calYear;
 
-  // Считаем заказы по event_date за этот месяц (активные + архив)
+  // Считаем заказы по event_date за этот месяц (активные + архив, БЕЗ отменённых)
   const counts = {};
   [...ACTIVE_ORDERS, ...ARCHIVE_ORDERS].forEach(o => {
+    if (o.status === '❌ Отменён') return; // #3: отменённые не считаем
     const d = o.event_date || '';
     if (!d) return;
     const parts = d.split('.');
@@ -385,6 +386,14 @@ function renderOrderDetail(order, isActive) {
     ? '🚗 Доставка · ' + esc(order.address)
     : '🏠 ' + esc(order.delivery_type || 'Самовывоз');
 
+  // #2: строка предоплаты в hero (если есть prepayment_amount)
+  const prepAmt = +order.prepayment_amount || 0;
+  const prepLine = prepAmt > 0
+    ? (prepAmt >= total
+        ? `<div class="od-hero-row od-prep-paid">✅ Оплачено полностью: ${prepAmt.toFixed(2)} BYN</div>`
+        : `<div class="od-hero-row od-prep-line">💰 Предоплата: ${prepAmt.toFixed(2)} BYN</div>`)
+    : '';
+
   html += `<div class="od-hero">
     <div class="od-hero-top">
       <div class="od-hero-client">${esc(order.client)}</div>
@@ -394,7 +403,25 @@ function renderOrderDetail(order, isActive) {
     </div>
     <div class="od-hero-row">📅 ${eventStr}</div>
     <div class="od-hero-row">${delivLine}</div>
+    ${prepLine}
   </div>`;
+
+  // ══ #2: Кнопки денег (предоплата / оплата полностью) + расход по заказу ══
+  if (isActive) {
+    html += `<div class="od-money-row">
+      <button class="od-money-btn od-money-prep" onclick="addPrepayment(${order.row})">
+        <span class="od-money-ico">💰</span>Внести предоплату
+      </button>
+      <button class="od-money-btn od-money-full" onclick="markPaidFull(${order.row})">
+        <span class="od-money-ico">✅</span>Оплачен полностью
+      </button>
+    </div>`;
+    html += `<div class="od-expense-row">
+      <button class="od-expense-btn" onclick="addOrderExpense(${order.row})">
+        <span class="od-money-ico">💸</span>Внести расходы по заказу
+      </button>
+    </div>`;
+  }
 
   // ══ Кнопки действий — плитки сразу под hero ══
   const addrEnc = encodeURIComponent(order.address || '');
@@ -770,6 +797,41 @@ function renderRevenueModal(d) {
 function renderExpensesModal(d) {
   const fmt = v => (+v || 0).toFixed(2).replace('.', ',');
   let html = '';
+
+  // #1: Расходы по заказам (из листа Расходы_заказов)
+  const orderExp = d.order_expenses || [];
+  const totalOrderExp = orderExp.reduce((s, r) => s + (+r.sum || 0), 0);
+
+  if (orderExp.length) {
+    // Группировка по заказам (client)
+    const byOrder = {};
+    orderExp.forEach(r => {
+      const key = r.client || '—';
+      if (!byOrder[key]) byOrder[key] = { sum: 0, count: 0, row: r.order_row, items: [] };
+      byOrder[key].sum += +r.sum || 0;
+      byOrder[key].count++;
+      byOrder[key].items.push(r);
+    });
+
+    html += `<div class="rev-orders-hdr">💸 Расходы по заказам (${orderExp.length})</div>`;
+    html += `<div class="rev-orders">`;
+    Object.keys(byOrder).forEach(client => {
+      const o = byOrder[client];
+      html += `<div class="rev-order">
+        <div class="rev-o-top">
+          <div class="rev-o-client">${esc(client)}</div>
+          <div class="rev-o-total" style="color:var(--red)">−${fmt(o.sum)} BYN</div>
+        </div>`;
+      o.items.forEach(it => {
+        html += `<div class="rev-o-date">📅 ${esc(it.date || '—')}${it.note ? ' · ' + esc(it.note) : ''}</div>`;
+      });
+      html += `</div>`;
+    });
+    html += `</div>`;
+    html += `<div class="rev-summary" style="margin-top:8px">
+      <div class="rev-sum-total"><span>Итого по заказам</span><span>−${fmt(totalOrderExp)} BYN</span></div>
+    </div>`;
+  }
 
   // ТОЛЬКО расходы — доходы вне бота исключаем (они в модалке выручки)
   const allRows = d.month_expenses || [];
