@@ -8,8 +8,8 @@
 const WEBAPP_URL = "https://vearjkeee.github.io/Slaunaya_eza/index.html";
 
 const ST = {
-  NEW:  "🆕 Новый",  CONF: "✅ Подтверждён",
-  COOK: "🍳 Готовится", DONE: "✔️ Выполнен", CANC: "❌ Отменён",
+  NEW:  "🆕 Новый",  PREPAID: "💰 Предоплачен",
+  DONE: "✔️ Выполнен", CANC: "❌ Отменён",
 };
 
 // P6: Доступные единицы измерения в корзине и редакторе блюда.
@@ -526,10 +526,10 @@ function findOrder(row) {
 // ══════════════════════════════════════════════════════════
 function openStatusModal(row) {
   const order = findOrder(row);
-  const statuses = [ST.NEW, ST.CONF, ST.COOK, ST.DONE, ST.CANC];
+  const statuses = [ST.NEW, ST.PREPAID, ST.DONE, ST.CANC];
   let html = '<div class="status-grid">';
   statuses.forEach(s => {
-    const sc = ({ [ST.NEW]:"st-new",[ST.CONF]:"st-conf",[ST.COOK]:"st-cook",[ST.DONE]:"st-done",[ST.CANC]:"st-canc" })[s] || '';
+    const sc = ({ [ST.NEW]:"st-new",[ST.PREPAID]:"st-prepaid",[ST.DONE]:"st-done",[ST.CANC]:"st-canc" })[s] || '';
     const on = order?.status === s ? ' on' : '';
     html += `<button class="st-btn ${sc}${on}" onclick="changeStatus(${row},'${s}')">${s}</button>`;
   });
@@ -563,6 +563,57 @@ function changeStatus(row, status) {
     updateAllBadges();
 
     await sendActionToGAS({ action: 'change_status', order_row: row, status });
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// ПРЕДОПЛАТА И РАСХОДЫ ПО ЗАКАЗУ
+// ══════════════════════════════════════════════════════════
+function addPrepayment(row) {
+  const order = findOrder(row);
+  if (!order) return;
+  const total = +order.total || 0;
+  const amount = prompt(`Введите сумму предоплаты (итого ${total.toFixed(2)} BYN):`, total ? (total / 2).toFixed(2) : '');
+  if (amount === null) return;
+  const sum = parseFloat(String(amount).replace(',', '.')) || 0;
+  if (sum <= 0) { showToast('Введите сумму больше 0'); return; }
+  showConfirm('Внести предоплату', `Сумма: ${sum.toFixed(2)} BYN\nЗаказ перейдёт в статус «💰 Предоплачен»`, 'Внести', async () => {
+    const o = findOrder(row);
+    if (o) { o.prepayment_amount = sum; o.status = ST.PREPAID; }
+    const updated = findOrder(row);
+    if (updated) renderOrderDetail(updated, ACTIVE_ORDERS.some(o => o.row == row));
+    renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
+    await sendActionToGAS({ action: 'add_prepayment', order_row: row, amount: sum });
+  });
+}
+
+function markPaidFull(row) {
+  const order = findOrder(row);
+  if (!order) return;
+  const total = +order.total || 0;
+  showConfirm('Оплата полностью', `Отметить заказ оплаченным полностью (${total.toFixed(2)} BYN)?`, 'Да', async () => {
+    const o = findOrder(row);
+    if (o) { o.prepayment_amount = total; o.status = ST.PREPAID; }
+    const updated = findOrder(row);
+    if (updated) renderOrderDetail(updated, ACTIVE_ORDERS.some(o => o.row == row));
+    renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
+    await sendActionToGAS({ action: 'mark_paid_full', order_row: row });
+  });
+}
+
+function addOrderExpense(row) {
+  const order = findOrder(row);
+  if (!order) return;
+  const amount = prompt('Введите сумму расхода (BYN):', '');
+  if (amount === null) return;
+  const sum = parseFloat(String(amount).replace(',', '.')) || 0;
+  if (sum <= 0) { showToast('Введите сумму больше 0'); return; }
+  const note = prompt('Примечание (упаковка, доставка курьером…):', '') || '';
+  showConfirm('Внести расход', `Расход по заказу: ${sum.toFixed(2)} BYN${note ? '\n' + note : ''}`, 'Внести', async () => {
+    await sendActionToGAS({ action: 'add_order_expense', order_row: row, amount: sum, note });
+    showToast('✓ Расход по заказу записан');
+    // Обновляем детали, чтобы показать расход
+    setTimeout(() => loadCache(true), 800);
   });
 }
 
@@ -829,6 +880,13 @@ async function runAI() {
 
 function applyAIResultToForm(res) {
   if (!res) return;
+  // #4: сохраняем текущие настройки доставки/оплаты до применения ИИ-результата.
+  // ИИ может не вернуть эти поля — тогда восстанавливаем то, что было установлено вручную.
+  const savedDelivType = delivType;
+  const savedDelivCost = document.getElementById('o-dcost')?.value || '';
+  const savedAddr      = document.getElementById('o-addr')?.value || '';
+  const savedPrepay    = prepay;
+
   if (res.client)        document.getElementById('o-client').value  = res.client;
   if (res.contact) setContactValue(res.contact);
   if (res.event_date)    document.getElementById('o-date').value    = dateToISO(res.event_date);
@@ -861,6 +919,16 @@ function applyAIResultToForm(res) {
       };
       cartOrder.push(id);
     });
+  }
+
+  // #4: если ИИ не вернул доставку/оплату — восстанавливаем сохранённые значения
+  if (!res.delivery_type) {
+    setDeliv(savedDelivType, null, true);
+    if (document.getElementById('o-dcost')) document.getElementById('o-dcost').value = savedDelivCost;
+    if (document.getElementById('o-addr')) document.getElementById('o-addr').value = savedAddr;
+  }
+  if (res.prepayment === undefined) {
+    setPay(savedPrepay, null, true);
   }
   saveDraft();
   renderCurrentTab();
