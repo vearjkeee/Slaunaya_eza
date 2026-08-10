@@ -921,8 +921,9 @@ async function runAI() {
       if (resData && !resData.error && resData.ai_result) {
         
         const applyAI = () => {
+          // applyAIResultToForm сам показывает информативный тост
+          // (ИИ заполнил / оставлено вашим) — тут второй не нужен.
           applyAIResultToForm(resData.ai_result);
-          showToast("🤖 Сообщение успешно распознано! Блюда в корзине");
         };
 
         if (Object.keys(cart).length > 0 && resData.ai_result.dishes?.length > 0) {
@@ -952,29 +953,101 @@ async function runAI() {
 
 function applyAIResultToForm(res) {
   if (!res) return;
-  // #4: сохраняем текущие настройки доставки/оплаты до применения ИИ-результата.
-  // ИИ может не вернуть эти поля — тогда восстанавливаем то, что было установлено вручную.
-  const savedDelivType = delivType;
-  const savedDelivCost = document.getElementById('o-dcost')?.value || '';
-  const savedAddr      = document.getElementById('o-addr')?.value || '';
-  const savedPrepay    = prepay;
 
-  if (res.client)        document.getElementById('o-client').value  = res.client;
-  if (res.contact) setContactValue(res.contact);
-  if (res.event_date)    document.getElementById('o-date').value    = dateToISO(res.event_date);
-  if (res.event_time)    document.getElementById('o-time').value    = res.event_time;
-  if (res.delivery_type) {
+  // ── Запоминаем ВСЁ, что пользователь уже заполнил вручную ──
+  // ИИ может не вернуть часть полей (пустая строка / undefined) —
+  // в этом случае НЕ перезаписываем ввод пользователя.
+  const saved = {
+    client:  document.getElementById('o-client')?.value || '',
+    contact: document.getElementById('o-contact')?.value || '',
+    date:    document.getElementById('o-date')?.value    || '',
+    time:    document.getElementById('o-time')?.value    || '',
+    delivType,
+    addr:    document.getElementById('o-addr')?.value    || '',
+    dcost:   document.getElementById('o-dcost')?.value   || '',
+    prepay,
+    note:    document.getElementById('c-note')?.value    || '',
+  };
+
+  const filled = [];   // поля, которые ИИ реально распознал
+  const kept   = [];   // поля, оставленные пользователю
+
+  // ── Клиент ──
+  if (res.client && res.client.trim()) {
+    document.getElementById('o-client').value = res.client;
+    filled.push('клиент');
+  } else kept.push('клиент');
+
+  // ── Контакт ──
+  if (res.contact && res.contact.trim()) {
+    setContactValue(res.contact);
+    filled.push('контакт');
+  } else kept.push('контакт');
+
+  // ── Дата ──
+  if (res.event_date && res.event_date.trim()) {
+    document.getElementById('o-date').value = dateToISO(res.event_date);
+    filled.push('дата');
+  } else kept.push('дата');
+
+  // ── Время ──
+  if (res.event_time && res.event_time.trim()) {
+    document.getElementById('o-time').value = res.event_time;
+    filled.push('время');
+  } else kept.push('время');
+
+  // ── Доставка ──
+  // ВАЖНО: GAS теперь возвращает пустую строку, если ИИ не распознал способ.
+  //В старом коде тут было `|| "Самовывоз"` — из-за этого выбор пользователя
+  // всегда перезаписывался на «Самовывоз» после AI-импорта.
+  if (res.delivery_type && res.delivery_type.trim()) {
     setDeliv(res.delivery_type, null, true);
-    if (res.delivery_type === 'Доставка' && res.address)
+    filled.push('доставка');
+    // Если ИИ распознал «Доставка» и указал адрес — подтягиваем.
+    // Если адрес НЕ распознан — оставляем тот, что ввёл пользователь.
+    if (res.delivery_type === 'Доставка' && res.address && res.address.trim()) {
       document.getElementById('o-addr').value = res.address;
+    } else if (res.delivery_type === 'Доставка') {
+      // Доставка распознана, адреса нет — держим старый адрес пользователя.
+      document.getElementById('o-addr').value = saved.addr;
+    } else {
+      // Самовывоз — адрес не нужен, но стоимость доставки обнуляем,
+      // иначе в saveOrder она «протащится» как leftover.
+      document.getElementById('o-addr').value = '';
+    }
+  } else {
+    // Доставка не распознана — восстанавливаем всё, что было у пользователя.
+    setDeliv(saved.delivType, null, true);
+    document.getElementById('o-addr').value  = saved.addr;
+    kept.push('доставка');
   }
-  if (res.delivery_cost) document.getElementById('o-dcost').value = res.delivery_cost;
-  if (res.note)          document.getElementById('c-note').value  = res.note;
 
-  if (res.prepayment !== undefined) {
+  // ── Стоимость доставки ──
+  if (res.delivery_cost !== undefined && res.delivery_cost !== null && !isNaN(res.delivery_cost)) {
+    document.getElementById('o-dcost').value = res.delivery_cost;
+    filled.push('стоим. достав.');
+  } else {
+    // Восстанавливаем сохранённую, чтобы не «сбрасывать» введённое число.
+    document.getElementById('o-dcost').value = saved.dcost;
+    kept.push('стоим. достав.');
+  }
+
+  // ── Примечание ──
+  if (res.note && res.note.trim()) {
+    document.getElementById('c-note').value = res.note;
+    filled.push('примечание');
+  } else kept.push('примечание');
+
+  // ── Предоплата ──
+  if (res.prepayment !== undefined && res.prepayment !== null) {
     setPay(!!res.prepayment, null, true);
+    filled.push('оплата');
+  } else {
+    setPay(saved.prepay, null, true);
+    kept.push('оплата');
   }
 
+  // ── Блюда ──
   if (res.dishes && res.dishes.length) {
     cart = {};
     cartOrder = [];
@@ -991,19 +1064,25 @@ function applyAIResultToForm(res) {
       };
       cartOrder.push(id);
     });
+    filled.push(`${res.dishes.length} блюд`);
+  } else if (Object.keys(cart).length > 0) {
+    kept.push('корзина');
   }
 
-  // #4: если ИИ не вернул доставку/оплату — восстанавливаем сохранённые значения
-  if (!res.delivery_type) {
-    setDeliv(savedDelivType, null, true);
-    if (document.getElementById('o-dcost')) document.getElementById('o-dcost').value = savedDelivCost;
-    if (document.getElementById('o-addr')) document.getElementById('o-addr').value = savedAddr;
-  }
-  if (res.prepayment === undefined) {
-    setPay(savedPrepay, null, true);
-  }
+  // ── Финализация ──
   saveDraft();
+  // updCart обязателен: если ИИ поменял delivery_cost, надо пересчитать «Итого».
+  // В старой версии его тут не было → стоимость доставки в «Итого».reflectaлась
+  // только при следующем ручном действии.
+  updCart();
   renderCurrentTab();
+
+  // Информативный тост: что ИИ сделал, что оставил пользователю.
+  // Без этого пользователю непонятно, почему что-то пропало или осталось.
+  const msgParts = [];
+  if (filled.length) msgParts.push('ИИ заполнил: ' + filled.join(', '));
+  if (kept.length)   msgParts.push('оставлено вашим: ' + kept.join(', '));
+  showToast('🤖 ' + (msgParts.join(' · ') || 'Готово'));
 }
 
 // ══════════════════════════════════════════════════════════
