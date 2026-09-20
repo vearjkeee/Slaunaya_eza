@@ -619,6 +619,8 @@ function addPrepayment(row) {
   if (!order) return;
   const total = +order.total || 0;
   const currentPrep = +order.prepayment_amount || 0;
+  const alreadyPrepaid = order.status === ST.PREPAID;
+
   const hint = currentPrep > 0
     ? `Уже внесено: ${currentPrep.toFixed(2)} BYN. Введите сумму ДОПЛАТЫ (прибавится к существующей)`
     : (total ? `Итого по заказу: ${total.toFixed(2)} BYN` : '');
@@ -632,19 +634,30 @@ function addPrepayment(row) {
       const addSum = parseFloat(String(vals.amount).replace(',', '.')) || 0;
       if (addSum <= 0) { showToast('Введите сумму больше 0'); return; }
       const newSum = currentPrep + addSum;
-      const confirmMsg = currentPrep > 0
-        ? `Доплата: ${addSum.toFixed(2)} BYN\nВсего предоплата: ${newSum.toFixed(2)} BYN${total ? ' (из ' + total.toFixed(2) + ')' : ''}\nЗаказ перейдёт в статус «💰 Предоплачен»`
-        : `Сумма: ${newSum.toFixed(2)} BYN\nЗаказ перейдёт в статус «💰 Предоплачен»`;
-      showConfirm('Внести предоплату', confirmMsg, 'Внести', async () => {
+      // #2: если заказ уже предоплачен — не меняем статус, только сумму. Confirm без упоминания статуса.
+      const confirmMsg = alreadyPrepaid
+        ? `Доплата: ${addSum.toFixed(2)} BYN\nВсего предоплата: ${newSum.toFixed(2)} BYN${total ? ' (из ' + total.toFixed(2) + ')' : ''}`
+        : (currentPrep > 0
+            ? `Доплата: ${addSum.toFixed(2)} BYN\nВсего предоплата: ${newSum.toFixed(2)} BYN${total ? ' (из ' + total.toFixed(2) + ')' : ''}\nЗаказ перейдёт в статус «💰 Предоплачен»`
+            : `Сумма: ${newSum.toFixed(2)} BYN\nЗаказ перейдёт в статус «💰 Предоплачен»`);
+      const confirmTitle = alreadyPrepaid ? 'Доплатить предоплату' : 'Внести предоплату';
+      showConfirm(confirmTitle, confirmMsg, 'Внести', async () => {
         const o = findOrder(row);
-        if (o) { o.prepayment_amount = newSum; o.status = ST.PREPAID; }
+        if (o) {
+          o.prepayment_amount = newSum;
+          if (!alreadyPrepaid) o.status = ST.PREPAID; // #2: статус меняем только если ещё не предоплачен
+        }
+        // Перерисовываем детали сразу с локально обновлённой суммой
         const updated = findOrder(row);
         if (updated) renderOrderDetail(updated, ACTIVE_ORDERS.some(o => o.row == row));
         renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
-        // Отправляем ИТОГОВУЮ сумму (старая + доплата) — GAS просто записывает её в столбец S
+        // Отправляем ИТОГОВУЮ сумму (старая + доплата) — GAS записывает её в столбец S
         await sendActionToGAS({ action: 'add_prepayment', order_row: row, amount: newSum });
-        // #4: перезагружаем данные чтобы получить prepayment_amount от GAS
-        setTimeout(() => loadCache(false), 1000);
+        // #1 fix: НЕ вызываем loadCache — он берёт кэш GAS (ещё старый) и затирает свежую сумму.
+        // sendActionToGAS уже обновил глобальные массивы ответом GAS и вызвал renderCurrentTab.
+        // Перерисовываем детали ещё раз — на случай если sendActionToGAS вернул свежие active_orders
+        const updated2 = findOrder(row);
+        if (updated2) renderOrderDetail(updated2, ACTIVE_ORDERS.some(o => o.row == row));
       });
     }
   );
@@ -661,8 +674,9 @@ function markPaidFull(row) {
     if (updated) renderOrderDetail(updated, ACTIVE_ORDERS.some(o => o.row == row));
     renderOrders(ACTIVE_ORDERS, ARCHIVE_ORDERS, orderTab, searchQuery);
     await sendActionToGAS({ action: 'mark_paid_full', order_row: row });
-    // #4: перезагружаем данные
-    setTimeout(() => loadCache(false), 1000);
+    // Перерисовываем детали после ответа GAS (он вернул свежие active_orders)
+    const updated2 = findOrder(row);
+    if (updated2) renderOrderDetail(updated2, ACTIVE_ORDERS.some(o => o.row == row));
   });
 }
 
@@ -921,9 +935,8 @@ async function runAI() {
       if (resData && !resData.error && resData.ai_result) {
         
         const applyAI = () => {
-          // applyAIResultToForm сам показывает информативный тост
-          // (ИИ заполнил / оставлено вашим) — тут второй не нужен.
           applyAIResultToForm(resData.ai_result);
+          showToast("🤖 Сообщение успешно распознано! Блюда в корзине");
         };
 
         if (Object.keys(cart).length > 0 && resData.ai_result.dishes?.length > 0) {
@@ -953,101 +966,29 @@ async function runAI() {
 
 function applyAIResultToForm(res) {
   if (!res) return;
+  // #4: сохраняем текущие настройки доставки/оплаты до применения ИИ-результата.
+  // ИИ может не вернуть эти поля — тогда восстанавливаем то, что было установлено вручную.
+  const savedDelivType = delivType;
+  const savedDelivCost = document.getElementById('o-dcost')?.value || '';
+  const savedAddr      = document.getElementById('o-addr')?.value || '';
+  const savedPrepay    = prepay;
 
-  // ── Запоминаем ВСЁ, что пользователь уже заполнил вручную ──
-  // ИИ может не вернуть часть полей (пустая строка / undefined) —
-  // в этом случае НЕ перезаписываем ввод пользователя.
-  const saved = {
-    client:  document.getElementById('o-client')?.value || '',
-    contact: document.getElementById('o-contact')?.value || '',
-    date:    document.getElementById('o-date')?.value    || '',
-    time:    document.getElementById('o-time')?.value    || '',
-    delivType,
-    addr:    document.getElementById('o-addr')?.value    || '',
-    dcost:   document.getElementById('o-dcost')?.value   || '',
-    prepay,
-    note:    document.getElementById('c-note')?.value    || '',
-  };
-
-  const filled = [];   // поля, которые ИИ реально распознал
-  const kept   = [];   // поля, оставленные пользователю
-
-  // ── Клиент ──
-  if (res.client && res.client.trim()) {
-    document.getElementById('o-client').value = res.client;
-    filled.push('клиент');
-  } else kept.push('клиент');
-
-  // ── Контакт ──
-  if (res.contact && res.contact.trim()) {
-    setContactValue(res.contact);
-    filled.push('контакт');
-  } else kept.push('контакт');
-
-  // ── Дата ──
-  if (res.event_date && res.event_date.trim()) {
-    document.getElementById('o-date').value = dateToISO(res.event_date);
-    filled.push('дата');
-  } else kept.push('дата');
-
-  // ── Время ──
-  if (res.event_time && res.event_time.trim()) {
-    document.getElementById('o-time').value = res.event_time;
-    filled.push('время');
-  } else kept.push('время');
-
-  // ── Доставка ──
-  // ВАЖНО: GAS теперь возвращает пустую строку, если ИИ не распознал способ.
-  //В старом коде тут было `|| "Самовывоз"` — из-за этого выбор пользователя
-  // всегда перезаписывался на «Самовывоз» после AI-импорта.
-  if (res.delivery_type && res.delivery_type.trim()) {
+  if (res.client)        document.getElementById('o-client').value  = res.client;
+  if (res.contact) setContactValue(res.contact);
+  if (res.event_date)    document.getElementById('o-date').value    = dateToISO(res.event_date);
+  if (res.event_time)    document.getElementById('o-time').value    = res.event_time;
+  if (res.delivery_type) {
     setDeliv(res.delivery_type, null, true);
-    filled.push('доставка');
-    // Если ИИ распознал «Доставка» и указал адрес — подтягиваем.
-    // Если адрес НЕ распознан — оставляем тот, что ввёл пользователь.
-    if (res.delivery_type === 'Доставка' && res.address && res.address.trim()) {
+    if (res.delivery_type === 'Доставка' && res.address)
       document.getElementById('o-addr').value = res.address;
-    } else if (res.delivery_type === 'Доставка') {
-      // Доставка распознана, адреса нет — держим старый адрес пользователя.
-      document.getElementById('o-addr').value = saved.addr;
-    } else {
-      // Самовывоз — адрес не нужен, но стоимость доставки обнуляем,
-      // иначе в saveOrder она «протащится» как leftover.
-      document.getElementById('o-addr').value = '';
-    }
-  } else {
-    // Доставка не распознана — восстанавливаем всё, что было у пользователя.
-    setDeliv(saved.delivType, null, true);
-    document.getElementById('o-addr').value  = saved.addr;
-    kept.push('доставка');
   }
+  if (res.delivery_cost) document.getElementById('o-dcost').value = res.delivery_cost;
+  if (res.note)          document.getElementById('c-note').value  = res.note;
 
-  // ── Стоимость доставки ──
-  if (res.delivery_cost !== undefined && res.delivery_cost !== null && !isNaN(res.delivery_cost)) {
-    document.getElementById('o-dcost').value = res.delivery_cost;
-    filled.push('стоим. достав.');
-  } else {
-    // Восстанавливаем сохранённую, чтобы не «сбрасывать» введённое число.
-    document.getElementById('o-dcost').value = saved.dcost;
-    kept.push('стоим. достав.');
-  }
-
-  // ── Примечание ──
-  if (res.note && res.note.trim()) {
-    document.getElementById('c-note').value = res.note;
-    filled.push('примечание');
-  } else kept.push('примечание');
-
-  // ── Предоплата ──
-  if (res.prepayment !== undefined && res.prepayment !== null) {
+  if (res.prepayment !== undefined) {
     setPay(!!res.prepayment, null, true);
-    filled.push('оплата');
-  } else {
-    setPay(saved.prepay, null, true);
-    kept.push('оплата');
   }
 
-  // ── Блюда ──
   if (res.dishes && res.dishes.length) {
     cart = {};
     cartOrder = [];
@@ -1064,25 +1005,19 @@ function applyAIResultToForm(res) {
       };
       cartOrder.push(id);
     });
-    filled.push(`${res.dishes.length} блюд`);
-  } else if (Object.keys(cart).length > 0) {
-    kept.push('корзина');
   }
 
-  // ── Финализация ──
+  // #4: если ИИ не вернул доставку/оплату — восстанавливаем сохранённые значения
+  if (!res.delivery_type) {
+    setDeliv(savedDelivType, null, true);
+    if (document.getElementById('o-dcost')) document.getElementById('o-dcost').value = savedDelivCost;
+    if (document.getElementById('o-addr')) document.getElementById('o-addr').value = savedAddr;
+  }
+  if (res.prepayment === undefined) {
+    setPay(savedPrepay, null, true);
+  }
   saveDraft();
-  // updCart обязателен: если ИИ поменял delivery_cost, надо пересчитать «Итого».
-  // В старой версии его тут не было → стоимость доставки в «Итого».reflectaлась
-  // только при следующем ручном действии.
-  updCart();
   renderCurrentTab();
-
-  // Информативный тост: что ИИ сделал, что оставил пользователю.
-  // Без этого пользователю непонятно, почему что-то пропало или осталось.
-  const msgParts = [];
-  if (filled.length) msgParts.push('ИИ заполнил: ' + filled.join(', '));
-  if (kept.length)   msgParts.push('оставлено вашим: ' + kept.join(', '));
-  showToast('🤖 ' + (msgParts.join(' · ') || 'Готово'));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1889,8 +1824,87 @@ function renderDashboard(d) {
   </div>`;
 
   // P5: блок «Последние записи» убран — заменён на модалку расходов (openExpensesModal)
+
+  // #3: Кнопка калькулятора
+  html += `<div class="calc-btn-wrap">
+    <button class="calc-btn" onclick="openCalculatorModal()">
+      <span class="calc-btn-ico">🧮</span>Калькулятор
+    </button>
+  </div>`;
+
   html += `<div style="height:16px"></div>`;
   document.getElementById('dashboard-body').innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════
+// #3: КАЛЬКУЛЯТОР
+// ══════════════════════════════════════════════════════════
+let _calcExpr = '';
+function openCalculatorModal() {
+  _calcExpr = '';
+  document.getElementById('modal-title').textContent = 'Калькулятор';
+  document.getElementById('modal-body').innerHTML = renderCalculator();
+  document.getElementById('modal').classList.add('on');
+}
+
+function calcPress(val) {
+  if (val === 'C') { _calcExpr = ''; }
+  else if (val === '⌫') { _calcExpr = _calcExpr.slice(0, -1); }
+  else if (val === '=') {
+    try {
+      // Безопасное вычисление: только цифры, операторы, скобки, точка
+      const safe = _calcExpr.replace(/[^0-9+\-*/.() ]/g, '');
+      if (!safe) { _calcExpr = ''; }
+      else {
+        const result = Function('"use strict";return (' + safe + ')')();
+        _calcExpr = (Math.round(result * 100) / 100).toString();
+      }
+    } catch(e) { _calcExpr = 'Ошибка'; }
+  }
+  else { _calcExpr += val; }
+  const disp = document.getElementById('calc-display');
+  if (disp) disp.value = _calcExpr || '0';
+}
+
+function calcCopyResult() {
+  const val = document.getElementById('calc-display').value;
+  if (!val || val === '0' || val === 'Ошибка') { showToast('Нечего копировать'); return; }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(val).then(() => showToast('✓ Скопировано: ' + val));
+  } else {
+    // Фолбэк
+    const ta = document.createElement('textarea');
+    ta.value = val; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showToast('✓ Скопировано: ' + val); } catch(e) { showToast('Не удалось скопировать'); }
+    document.body.removeChild(ta);
+  }
+}
+
+function renderCalculator() {
+  const keys = [
+    ['C','⌫','%','/'],
+    ['7','8','9','*'],
+    ['4','5','6','-'],
+    ['1','2','3','+'],
+    ['0','.','(',')'],
+    ['=']
+  ];
+  let html = '<div class="calc-wrap">';
+  html += '<input class="calc-display" id="calc-display" type="text" value="0" readonly/>';
+  html += '<div class="calc-actions">';
+  html += '<button class="calc-copy" onclick="calcCopyResult()">📋 Копировать результат</button>';
+  html += '</div>';
+  html += '<div class="calc-grid">';
+  keys.forEach(row => {
+    row.forEach(k => {
+      const cls = k === '=' ? 'calc-key calc-eq' : (k === 'C' || k === '⌫' ? 'calc-key calc-op-clr' : ('+-*/%'.includes(k) ? 'calc-key calc-op' : 'calc-key'));
+      html += `<button class="${cls}" onclick="calcPress('${k}')">${k}</button>`;
+    });
+  });
+  html += '</div>';
+  html += '<div style="padding:8px 16px 16px"><button class="cd-btn cd-cancel" style="width:100%" onclick="closeModal()">Закрыть</button></div>';
+  html += '</div>';
+  return html;
 }
 
 // ══════════════════════════════════════════════════════════
