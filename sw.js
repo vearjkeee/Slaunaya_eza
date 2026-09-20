@@ -5,7 +5,7 @@
 // GAS-запросы идут network-first с fallback на cache.
 // ══════════════════════════════════════════════════════════
 
-const CACHE_VERSION = '1.7.0'; // v1.7: фикс AI-бага (applyAIResultToForm + GAS default "") + корректная бакингация ?v=
+const CACHE_VERSION = '1.7.1'; // v1.7: фикс AI-бага (applyAIResultToForm + GAS default "") + корректная бакингация ?v=
 const CACHE_NAME    = 'slaunaya-shell-' + CACHE_VERSION;
 const GAS_CACHE     = 'slaunaya-gas-'   + CACHE_VERSION;
 
