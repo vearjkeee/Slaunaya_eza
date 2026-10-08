@@ -1770,7 +1770,7 @@ function renderDashboard(d) {
     <div class="db-card db-card-main db-card-clickable" onclick="openRevenueModal()">
       <div class="db-card-label">Выручка · нажмите для деталей</div>
       <div class="db-card-value">${fmt(d.revenue_total)} <span class="db-byn">BYN</span></div>
-      <div class="db-card-sub">${d.orders_count} заказ(ов)${d.revenue_extra > 0 ? ' + ' + fmt(d.revenue_extra) + ' вне бота' : ''}</div>
+      <div class="db-card-sub">${d.orders_count} заказ(ов)${d.revenue_prepay > 0 ? ' + ' + fmt(d.revenue_prepay) + ' предоплат' : ''}${d.revenue_extra > 0 ? ' + ' + fmt(d.revenue_extra) + ' вне бота' : ''}</div>
     </div>
     <div class="db-card db-card-tax">
       <div class="db-card-label">Налог 10%</div>
@@ -1787,6 +1787,13 @@ function renderDashboard(d) {
       <div class="db-card-value">${fmt(d.net_profit)} <span class="db-byn">BYN</span></div>
       <div class="db-card-sub">выручка − налог − расходы</div>
     </div>
+  </div>`;
+
+  // ПРАВКА 3: кнопка калькулятора перенесена выше блока «Доход вне бота»
+  html += `<div class="calc-btn-wrap">
+    <button class="calc-btn" onclick="openCalculatorModal()">
+      <span class="calc-btn-ico">🧮</span>Калькулятор
+    </button>
   </div>`;
 
   html += `<div class="sec" style="margin-top:4px">
@@ -1825,13 +1832,6 @@ function renderDashboard(d) {
 
   // P5: блок «Последние записи» убран — заменён на модалку расходов (openExpensesModal)
 
-  // #3: Кнопка калькулятора
-  html += `<div class="calc-btn-wrap">
-    <button class="calc-btn" onclick="openCalculatorModal()">
-      <span class="calc-btn-ico">🧮</span>Калькулятор
-    </button>
-  </div>`;
-
   html += `<div style="height:16px"></div>`;
   document.getElementById('dashboard-body').innerHTML = html;
 }
@@ -1848,22 +1848,38 @@ function openCalculatorModal() {
 }
 
 function calcPress(val) {
+  // После «Ошибка» любое нажатие начинает новое выражение
+  if (_calcExpr === 'Ошибка') _calcExpr = '';
   if (val === 'C') { _calcExpr = ''; }
   else if (val === '⌫') { _calcExpr = _calcExpr.slice(0, -1); }
   else if (val === '=') {
     try {
-      // Безопасное вычисление: только цифры, операторы, скобки, точка
-      const safe = _calcExpr.replace(/[^0-9+\-*/.() ]/g, '');
+      // Безопасное вычисление: только цифры, операторы, скобки, точка, %
+      const safe = _calcExpr.replace(/[^0-9+\-*/.()% ]/g, '');
       if (!safe) { _calcExpr = ''; }
       else {
-        const result = Function('"use strict";return (' + safe + ')')();
+        // Кнопка % теперь работает:
+        //   200+10% → 200+(200*10/100) — процент «от числа» при +/−
+        //   200*10% → 200*10/100       — просто доля при */
+        let expr = safe;
+        const pctRe = /(\d+(?:\.\d+)?)([+\-])(\d+(?:\.\d+)?)%/;
+        while (pctRe.test(expr)) {
+          expr = expr.replace(pctRe, (m, a, op, b) => `${a}${op}(${a}*${b}/100)`);
+        }
+        expr = expr.replace(/%/g, '/100');
+        const result = Function('"use strict";return (' + expr + ')')();
+        if (typeof result !== 'number' || !isFinite(result)) throw new Error('bad result');
         _calcExpr = (Math.round(result * 100) / 100).toString();
       }
     } catch(e) { _calcExpr = 'Ошибка'; }
   }
   else { _calcExpr += val; }
   const disp = document.getElementById('calc-display');
-  if (disp) disp.value = _calcExpr || '0';
+  if (disp) {
+    disp.value = _calcExpr || '0';
+    // ПРАВКА 3: автопрокрутка дисплея — при длинном выражении всегда виден его конец (курсор)
+    disp.scrollLeft = disp.scrollWidth;
+  }
 }
 
 function calcCopyResult() {
