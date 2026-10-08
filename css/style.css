@@ -844,6 +844,9 @@ body.is-animating .tab-bar * {
 /* Строки предоплаты в hero */
 .od-prep-line{color:var(--grn);font-weight:600;font-size:14px!important;margin-top:6px}
 .od-prep-paid{color:var(--grn);font-weight:700;font-size:14px!important;margin-top:6px}
+/* ПРАВКА 1: строка «Осталось доплатить» в карточке заказа (акцентный цвет темы) */
+.od-prep-remain{color:var(--acc);font-weight:700;font-size:14px!important;margin-top:2px}
+.total-remain{color:var(--acc);font-weight:700}
 
 /* Статус Предоплачен — зелёный */
 .st-prepaid{background:var(--grn-l);color:var(--grn)}
