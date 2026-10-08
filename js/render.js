@@ -389,12 +389,17 @@ function renderOrderDetail(order, isActive) {
     : '🏠 ' + esc(order.delivery_type || 'Самовывоз');
 
   // #2: строка предоплаты в hero (если есть prepayment_amount)
+  // ПРАВКА 1: если внесена предоплата — следующей строкой показываем,
+  // сколько осталось доплатить (разница между суммой заказа и предоплатой)
   const prepAmt = +order.prepayment_amount || 0;
-  const prepLine = prepAmt > 0
-    ? (prepAmt >= total
-        ? `<div class="od-hero-row od-prep-paid">✅ Оплачено полностью: ${prepAmt.toFixed(2)} BYN</div>`
-        : `<div class="od-hero-row od-prep-line">💰 Предоплата: ${prepAmt.toFixed(2)} BYN</div>`)
-    : '';
+  const remain  = +(total - prepAmt).toFixed(2);
+  let prepLine = '';
+  if (prepAmt > 0) {
+    prepLine = prepAmt >= total
+      ? `<div class="od-hero-row od-prep-paid">✅ Оплачено полностью: ${prepAmt.toFixed(2)} BYN</div>`
+      : `<div class="od-hero-row od-prep-line">💰 Предоплата: ${prepAmt.toFixed(2)} BYN</div>`
+        + `<div class="od-hero-row od-prep-remain">🧾 Осталось доплатить: ${remain.toFixed(2)} BYN</div>`;
+  }
 
   html += `<div class="od-hero">
     <div class="od-hero-top">
@@ -503,8 +508,15 @@ function renderOrderDetail(order, isActive) {
     if (delivery > 0)
       html += `<div class="total-line"><span>Доставка</span><span>${delivery.toFixed(2)} BYN</span></div>`;
     html += `<div class="total-line big"><span>Итого</span><span class="tv">${total.toFixed(2)} BYN</span></div>`;
-    if (order.prepayment)
+    // ПРАВКА 1: в блоке итогов показываем фактическую предоплату и остаток к доплате.
+    // Если предоплата ещё не внесена, но флаг стоит — оставляем старую подсказку 50%.
+    if (prepAmt > 0) {
+      html += `<div class="total-line" style="margin-top:4px"><span>Предоплата</span><span>${prepAmt.toFixed(2)} BYN</span></div>`;
+      if (remain > 0)
+        html += `<div class="total-line total-remain"><span>Осталось доплатить</span><span>${remain.toFixed(2)} BYN</span></div>`;
+    } else if (order.prepayment) {
       html += `<div class="total-line" style="margin-top:4px"><span>Предоплата 50%</span><span>${(total/2).toFixed(2)} BYN</span></div>`;
+    }
     html += `</div></div></div>`;
   } else {
     html += `<div class="sec">
@@ -724,9 +736,12 @@ function renderRevenueModal(d) {
   let html = '';
 
   // Сводка
+  // ПРАВКА 2: предоплаты, полученные в этом месяце, уже входят в revenue_total —
+  // показываем их отдельной строкой, чтобы было видно, из чего сложилась выручка
   html += `<div class="rev-summary">
     <div class="rev-sum-row"><span>Заказов выполнено</span><span>${d.orders_count}</span></div>
     <div class="rev-sum-row"><span>Выручка по заказам</span><span>${fmt(d.revenue_orders)} BYN</span></div>
+    ${d.revenue_prepay > 0 ? `<div class="rev-sum-row"><span>Предоплаты получено</span><span>+${fmt(d.revenue_prepay)} BYN</span></div>` : ''}
     ${d.revenue_extra > 0 ? `<div class="rev-sum-row"><span>Доход вне бота</span><span>+${fmt(d.revenue_extra)} BYN</span></div>` : ''}
     <div class="rev-sum-row rev-sum-total"><span>Итого выручка</span><span>${fmt(d.revenue_total)} BYN</span></div>
   </div>`;
@@ -750,6 +765,9 @@ function renderRevenueModal(d) {
       const deliv = o.delivery_type === 'Доставка' && o.address
         ? 'Доставка · ' + o.address
         : (o.delivery_type || 'Самовывоз');
+      // ПРАВКА 2: если часть суммы заказа уже учтена месяцем ранее (предоплата),
+      // поясняем, сколько именно вошло в выручку этого месяца
+      const partlyCounted = typeof o.counted === 'number' && Math.abs(o.counted - o.total) > 0.004;
       html += `<div class="rev-order">
         <div class="rev-o-top">
           <div class="rev-o-client">${esc(o.client || '—')}</div>
@@ -757,8 +775,31 @@ function renderRevenueModal(d) {
         </div>
         <div class="rev-o-date">📅 ${esc(dateStr)}</div>
         <div class="rev-o-deliv">🚗 ${esc(deliv)}</div>
+        ${partlyCounted ? `<div class="rev-o-note">💡 В выручку месяца: ${fmt(o.counted)} BYN (предоплата учтена месяцем ранее)</div>` : ''}
         ${o.dishes_count ? `<div class="rev-o-dishes">🍽 ${o.dishes_count} поз.</div>` : ''}
         ${o.note ? `<div class="rev-o-note">💬 ${esc(o.note)}</div>` : ''}
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // ПРАВКА 2: список предоплат, полученных в этом месяце
+  const prepayList = (d.prepayments || []).slice().sort((a, b) => {
+    const da = String(a.date || '').split('.').reverse().join('');
+    const dbb = String(b.date || '').split('.').reverse().join('');
+    return dbb.localeCompare(da);
+  });
+  if (prepayList.length) {
+    html += `<div class="rev-orders-hdr" style="margin-top:12px">Предоплаты месяца (${prepayList.length})</div>`;
+    html += `<div class="rev-orders">`;
+    prepayList.forEach(r => {
+      const name = r.client ? esc(r.client) : 'Заказ #' + r.order_row;
+      html += `<div class="rev-order">
+        <div class="rev-o-top">
+          <div class="rev-o-client">💰 ${name}</div>
+          <div class="rev-o-total" style="color:var(--grn)">+${fmt(r.sum)} BYN</div>
+        </div>
+        <div class="rev-o-date">📅 ${esc(r.date || '—')}</div>
       </div>`;
     });
     html += `</div>`;
