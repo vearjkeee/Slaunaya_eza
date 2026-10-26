@@ -1840,6 +1840,41 @@ function renderDashboard(d) {
 // #3: КАЛЬКУЛЯТОР
 // ══════════════════════════════════════════════════════════
 let _calcExpr = '';
+const CALC_OPS        = '+-*/%';
+const CALC_HISTORY_KEY = 'slaunaya_calc_history_v1';
+let _calcHistory = null; // ленивая загрузка из localStorage
+
+function loadCalcHistory() {
+  if (Array.isArray(_calcHistory)) return _calcHistory;
+  try { _calcHistory = JSON.parse(localStorage.getItem(CALC_HISTORY_KEY)) || []; }
+  catch (e) { _calcHistory = []; }
+  return _calcHistory;
+}
+
+function saveCalcHistory() {
+  try { localStorage.setItem(CALC_HISTORY_KEY, JSON.stringify(_calcHistory)); } catch (e) {}
+}
+
+function pushCalcHistory(expr, result) {
+  const h = loadCalcHistory();
+  h.unshift({ expr: expr, result: result, ts: Date.now() });
+  if (h.length > 50) h.length = 50;
+  saveCalcHistory();
+}
+
+function calcEndsWithOp(s) {
+  return s.length > 0 && CALC_OPS.includes(s[s.length - 1]);
+}
+
+function updateCalcDisplay() {
+  const disp = document.getElementById('calc-display');
+  if (disp) {
+    disp.value = _calcExpr || '0';
+    // ПРАВКА 3: автопрокрутка дисплея — при длинном выражении всегда виден его конец (курсор)
+    disp.scrollLeft = disp.scrollWidth;
+  }
+}
+
 function openCalculatorModal() {
   _calcExpr = '';
   document.getElementById('modal-title').textContent = 'Калькулятор';
@@ -1852,34 +1887,43 @@ function calcPress(val) {
   if (_calcExpr === 'Ошибка') _calcExpr = '';
   if (val === 'C') { _calcExpr = ''; }
   else if (val === '⌫') { _calcExpr = _calcExpr.slice(0, -1); }
-  else if (val === '=') {
-    try {
-      // Безопасное вычисление: только цифры, операторы, скобки, точка, %
-      const safe = _calcExpr.replace(/[^0-9+\-*/.()% ]/g, '');
-      if (!safe) { _calcExpr = ''; }
-      else {
-        // Кнопка % теперь работает:
-        //   200+10% → 200+(200*10/100) — процент «от числа» при +/−
-        //   200*10% → 200*10/100       — просто доля при */
-        let expr = safe;
-        const pctRe = /(\d+(?:\.\d+)?)([+\-])(\d+(?:\.\d+)?)%/;
-        while (pctRe.test(expr)) {
-          expr = expr.replace(pctRe, (m, a, op, b) => `${a}${op}(${a}*${b}/100)`);
-        }
-        expr = expr.replace(/%/g, '/100');
-        const result = Function('"use strict";return (' + expr + ')')();
-        if (typeof result !== 'number' || !isFinite(result)) throw new Error('bad result');
-        _calcExpr = (Math.round(result * 100) / 100).toString();
-      }
-    } catch(e) { _calcExpr = 'Ошибка'; }
+  else if (val === '=') { calcEquals(); }
+  else if (CALC_OPS.includes(val)) {
+    if (!_calcExpr && '*/%'.includes(val)) return; // выражение не может начинаться с * / %
+    // Если выражение уже заканчивается оператором — заменяем его новым (4+* → 4-)
+    if (calcEndsWithOp(_calcExpr)) _calcExpr = _calcExpr.slice(0, -1) + val;
+    else _calcExpr += val;
   }
   else { _calcExpr += val; }
-  const disp = document.getElementById('calc-display');
-  if (disp) {
-    disp.value = _calcExpr || '0';
-    // ПРАВКА 3: автопрокрутка дисплея — при длинном выражении всегда виден его конец (курсор)
-    disp.scrollLeft = disp.scrollWidth;
-  }
+  updateCalcDisplay();
+}
+
+function calcEquals() {
+  // Хвостовые операторы и точки отбрасываем: «4+4+» → «4+4», «5.» → «5»
+  let expr = _calcExpr.replace(/[+\-*/%.]+$/, '');
+  // Незакрытые скобки закрываем: «(4+4» → «(4+4)»
+  const open  = (expr.match(/\(/g) || []).length;
+  const close = (expr.match(/\)/g) || []).length;
+  for (let i = close; i < open; i++) expr += ')';
+  // Вычислять нечего (пусто или одно число без операторов) — оставляем как есть
+  if (!/[0-9]/.test(expr) || !/[+\-*/%()]/.test(expr)) return;
+  try {
+    // Кнопка % теперь работает:
+    //   200+10% → 200+(200*10/100) — процент «от числа» при +/−
+    //   200*10% → 200*10/100       — просто доля при */
+    let e = expr;
+    const pctRe = /(\d+(?:\.\d+)?)([+\-])(\d+(?:\.\d+)?)%/;
+    while (pctRe.test(e)) {
+      e = e.replace(pctRe, (m, a, op, b) => `${a}${op}(${a}*${b}/100)`);
+    }
+    e = e.replace(/%/g, '/100');
+    const result = Function('"use strict";return (' + e + ')')();
+    if (typeof result !== 'number' || !isFinite(result)) throw new Error('bad result');
+    _calcExpr = (Math.round(result * 100) / 100).toString();
+    // В историю — цепочка, которую вводил пользователь, и её результат
+    pushCalcHistory(expr, _calcExpr);
+    renderCalcHistoryPanel();
+  } catch(e) { _calcExpr = 'Ошибка'; }
 }
 
 function calcCopyResult() {
@@ -1907,9 +1951,11 @@ function renderCalculator() {
   ];
   let html = '<div class="calc-wrap">';
   html += '<input class="calc-display" id="calc-display" type="text" value="0" readonly/>';
-  html += '<div class="calc-actions">';
-  html += '<button class="calc-copy" onclick="calcCopyResult()">📋 Копировать результат</button>';
+  html += '<div class="calc-actions calc-actions-row">';
+  html += '<button class="calc-copy" onclick="calcCopyResult()">📋 Копировать</button>';
+  html += '<button class="calc-copy calc-hist-btn" onclick="calcHistoryToggle()">🕘 История</button>';
   html += '</div>';
+  html += '<div id="calc-history" style="display:none"></div>';
   html += '<div class="calc-grid">';
   keys.forEach(row => {
     row.forEach(k => {
@@ -1921,6 +1967,52 @@ function renderCalculator() {
   html += '<div style="padding:8px 16px 16px"><button class="cd-btn cd-cancel" style="width:100%" onclick="closeModal()">Закрыть</button></div>';
   html += '</div>';
   return html;
+}
+
+// ── История вычислений ────────────────────────────────────
+function calcHistoryToggle() {
+  const panel = document.getElementById('calc-history');
+  if (!panel) return;
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  renderCalcHistoryPanel();
+}
+
+function renderCalcHistoryPanel() {
+  const panel = document.getElementById('calc-history');
+  if (!panel || panel.style.display !== 'block') return;
+  const h = loadCalcHistory();
+  let html = '<div class="calc-hist-head"><span>История вычислений</span>';
+  if (h.length) html += '<button class="calc-hist-clear" onclick="calcHistoryClear()">Очистить</button>';
+  html += '</div>';
+  if (!h.length) {
+    html += '<div class="calc-hist-empty">Пока пусто — посчитайте что-нибудь</div>';
+  } else {
+    html += '<div class="calc-hist-list">';
+    h.forEach((it, i) => {
+      html += `<div class="calc-hist-item" onclick="calcHistoryPick(${i})">` +
+              `<span class="calc-hist-expr">${esc(it.expr)}</span>` +
+              `<span class="calc-hist-res">= ${esc(it.result)}</span></div>`;
+    });
+    html += '</div>';
+  }
+  panel.innerHTML = html;
+}
+
+// Нажатие на запись подставляет результат в текущее выражение
+function calcHistoryPick(i) {
+  const it = loadCalcHistory()[i];
+  if (!it) return;
+  if (_calcExpr === 'Ошибка' || !_calcExpr) _calcExpr = String(it.result);
+  else if (calcEndsWithOp(_calcExpr) || _calcExpr.endsWith('(')) _calcExpr += String(it.result);
+  else _calcExpr = String(it.result); // на дисплее одиночное число — заменяем
+  updateCalcDisplay();
+}
+
+function calcHistoryClear() {
+  _calcHistory = [];
+  saveCalcHistory();
+  renderCalcHistoryPanel();
 }
 
 // ══════════════════════════════════════════════════════════
