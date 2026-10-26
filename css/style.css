@@ -871,3 +871,19 @@ body.is-animating .tab-bar * {
 .calc-key.calc-op-clr{background:var(--red-l);color:var(--red)}
 .calc-key.calc-eq{grid-column:span 4;background:var(--acc);color:#fff;height:50px;font-size:20px}
 .calc-key.calc-eq:active{opacity:.88}
+
+/* ── Калькулятор: история вычислений ─────────────────── */
+.calc-actions-row{display:flex;gap:6px}
+.calc-actions-row .calc-copy{flex:1}
+.calc-hist-btn{background:var(--glass-bg-strong);color:var(--acc);border:1px solid var(--glass-border)}
+#calc-history{margin-bottom:8px;border:1px solid var(--glass-border);border-radius:var(--rad-s);background:var(--bg2);overflow:hidden}
+.calc-hist-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;font-size:12px;font-weight:600;color:var(--acc-d);background:var(--acc-l)}
+.calc-hist-clear{border:none;background:transparent;color:var(--red);font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;padding:2px 4px}
+.calc-hist-empty{padding:14px 12px;font-size:13px;color:var(--hint);text-align:center}
+.calc-hist-list{max-height:180px;overflow-y:auto}
+.calc-hist-item{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:9px 12px;border-bottom:1px solid var(--glass-border);cursor:pointer;transition:opacity .12s}
+.calc-hist-item:last-child{border-bottom:none}
+.calc-hist-item:active{opacity:.6}
+.calc-hist-expr{font-size:13px;color:var(--text);word-break:break-all}
+.calc-hist-res{font-size:14px;font-weight:700;color:var(--acc);white-space:nowrap}
+
